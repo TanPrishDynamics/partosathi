@@ -1,0 +1,23 @@
+
+# Python virtual environments
+.venv/
+.venv-1/
+venv/
+backend/venv/
+*/__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Build artifacts
+frontend/dist/
+admin-frontend/dist/
+
+# Environment
+.env
+
+# ML training data & model artifacts (large binary/csv files)
+backend/ml/synthetic_labor_data.csv
+backend/ml/lstm_model.pth

@@ -74,22 +74,57 @@ def _cervical_progress_rules(obs, all_observations):
     )
     if active_start and obs.cervical_dilation is not None:
         hours_from_active = (obs.timestamp - active_start.timestamp).total_seconds() / 3600
-        alert_line_dilation = 4.0 + (1.0 * hours_from_active)   # 1 cm/hr slope
-        action_line_dilation = 4.0 + (1.0 * max(0, hours_from_active - 4.0))  # 4 hrs right
+        alert_line_dilation = 4.0 + (1.0 * hours_from_active)          # 1 cm/hr slope
+        action_line_dilation = 4.0 + (1.0 * max(0, hours_from_active - 4.0))  # +4 hrs
 
-        if obs.cervical_dilation < action_line_dilation and hours_from_active > 4:
+        # Action line: only applies after 4 hrs from active start
+        if hours_from_active > 4 and obs.cervical_dilation < action_line_dilation:
             results.append({
                 "alert_type": "ACTION_LINE_CROSSED",
                 "severity": "red",
-                "message": f"🚨 ACTION LINE CROSSED: Labor has deviated beyond the action line. Cervical dilation ({obs.cervical_dilation} cm) is significantly below expected ({action_line_dilation:.1f} cm). Urgent obstetric review needed.",
+                "message": (
+                    f"🚨 ACTION LINE CROSSED: Dilation {obs.cervical_dilation} cm is below action line "
+                    f"({action_line_dilation:.1f} cm at {hours_from_active:.1f}h from active phase start). "
+                    f"Urgent obstetric review needed."
+                ),
             })
-        elif obs.cervical_dilation < alert_line_dilation and hours_from_active > 0:
+        # Alert line: applies immediately from active start
+        elif hours_from_active > 0 and obs.cervical_dilation < alert_line_dilation:
             results.append({
                 "alert_type": "ALERT_LINE_CROSSED",
                 "severity": "yellow",
-                "message": f"⚠️ ALERT LINE: Labor is crossing the alert line. Dilation ({obs.cervical_dilation} cm) is below expected ({alert_line_dilation:.1f} cm). Consider augmentation.",
+                "message": (
+                    f"⚠️ ALERT LINE: Dilation {obs.cervical_dilation} cm is below alert line "
+                    f"({alert_line_dilation:.1f} cm expected at {hours_from_active:.1f}h). "
+                    f"Consider augmentation if no progress in 1 hour."
+                ),
             })
 
+    return results
+
+
+def _inadequate_contractions_rules(obs):
+    """WHO: Adequate active-phase contractions = ≥3/10 min AND ≥40 s."""
+    results = []
+    dilation = obs.cervical_dilation
+    freq = obs.contraction_freq
+    duration = obs.contraction_duration
+
+    if dilation is None or dilation < 4.0:
+        return results
+    if freq is None or duration is None:
+        return results
+
+    if freq < 3 or duration < 40:
+        results.append({
+            "alert_type": "INADEQUATE_UTERINE_ACTIVITY",
+            "severity": "yellow",
+            "message": (
+                f"⚡ INADEQUATE UTERINE ACTIVITY: {freq}/10 min, {duration}s. "
+                f"WHO standard: ≥3 contractions/10 min, ≥40 s in active phase. "
+                f"Consider oxytocin augmentation."
+            ),
+        })
     return results
 
 
@@ -153,12 +188,7 @@ def _bp_rules(obs):
                 "severity": "red",
                 "message": f"🚨 SEVERE HYPERTENSION: BP {sys}/{dia} mmHg. Antihypertensive therapy required. Assess for pre-eclampsia.",
             })
-    elif sys >= 130 or dia >= 80:
-        results.append({
-            "alert_type": "ELEVATED_BP",
-            "severity": "yellow",
-            "message": f"⚡ ELEVATED BP: BP {sys}/{dia} mmHg is above normal range. Continue monitoring every 30 minutes.",
-        })
+    # Note: BP 130-139 / 80-89 is NOT flagged — WHO hypertension threshold is ≥140/90
 
     return results
 
@@ -245,6 +275,7 @@ def evaluate_observation(obs, all_observations):
     raw_alerts = []
     raw_alerts.extend(_fhr_rules(obs))
     raw_alerts.extend(_cervical_progress_rules(obs, all_observations))
+    raw_alerts.extend(_inadequate_contractions_rules(obs))
     raw_alerts.extend(_contraction_descent_rules(obs, all_observations))
     raw_alerts.extend(_bp_rules(obs))
     raw_alerts.extend(_temperature_rules(obs))

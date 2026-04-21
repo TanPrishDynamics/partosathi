@@ -1,153 +1,187 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import { Activity, Lock, Mail, ChevronRight, Loader2, Building2, Stethoscope } from 'lucide-react';
+import api from '../services/api';
+import { Activity, Lock, Mail, ChevronRight, Loader2, Stethoscope, Building2, Shield } from 'lucide-react';
+
+const MODES = [
+  { id: 'doctor', label: 'Doctor', icon: Stethoscope },
+  { id: 'admin',  label: 'Admin',  icon: Building2 },
+];
 
 const LoginPage = ({ onLogin }) => {
-  const [loginMode, setLoginMode] = useState('doctor'); // 'doctor' or 'admin'
-  const [email, setEmail] = useState('admin@hospital.com');
-  const [password, setPassword] = useState('admin123');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [mode, setMode]         = useState('doctor');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const endpoint = loginMode === 'admin' ? '/api/auth/admin-login' : '/api/auth/login';
-      const resp = await axios.post(endpoint, { email, password });
-      localStorage.setItem('token', resp.data.token);
-      localStorage.setItem('role', resp.data.role);
-      onLogin(loginMode === 'admin' ? resp.data.user : resp.data.doctor);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  const handleModeChange = m => {
+    setMode(m); setEmail(''); setPassword(''); setError('');
   };
 
-  const handleModeChange = (mode) => {
-    setLoginMode(mode);
-    setEmail('');
-    setPassword('');
-    setError('');
-    if (mode === 'admin') {
-      setEmail('admin@tanprish-dynamics.com');
-      setPassword('admin123');
-    } else {
-      setEmail('admin@hospital.com');
-      setPassword('admin123');
-    }
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setLoading(true); setError('');
+    try {
+      const endpoint = mode === 'admin' ? '/api/auth/admin-login' : '/api/auth/login';
+      const resp = await api.post(endpoint, { email, password });
+      // H-2: token is now in httpOnly cookie set by backend — NOT stored in localStorage
+      // Only non-sensitive user info is in the JSON body
+      const userData = mode === 'admin' ? resp.data.user : resp.data.doctor;
+      onLogin({ ...userData, role: resp.data.role });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Login failed. Please check credentials.');
+    } finally { setLoading(false); }
   };
 
   return (
-    <div className="min-h-screen gradient-navy flex items-center justify-center p-6 bg-[#0A0F1E]">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#00C9A7]/10 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]"></div>
-      </div>
+    <div style={{ minHeight: '100vh', background: '#0B1220', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', position: 'relative', overflow: 'hidden' }}>
 
-      <div className="w-full max-w-md relative z-10">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 gradient-teal rounded-2xl flex items-center justify-center shadow-2xl shadow-[#00C9A7]/30 mx-auto mb-4 animate-bounce-slow">
-            <Activity className="text-[#0A0F1E] w-8 h-8" />
+      {/* Background glows */}
+      <div style={{ position: 'absolute', top: '20%', left: '30%', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,211,238,0.06) 0%, transparent 65%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', bottom: '20%', right: '25%', width: '400px', height: '400px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(20,184,166,0.05) 0%, transparent 65%)', pointerEvents: 'none' }} />
+
+      <div style={{ width: '100%', maxWidth: '420px', position: 'relative', zIndex: 10 }} className="animate-fade-in">
+
+        {/* Brand header */}
+        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+          <div style={{
+            width: '68px', height: '68px', borderRadius: '20px', margin: '0 auto 18px',
+            background: 'linear-gradient(135deg, #22D3EE 0%, #14B8A6 100%)',
+            boxShadow: '0 20px 50px rgba(34,211,238,0.35)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Activity style={{ width: '34px', height: '34px', color: '#060D1A' }} />
           </div>
-          <h1 className="text-3xl font-bold font-serif mb-2 tracking-tight">e-Partogram</h1>
-          <p className="text-slate-400">Electronic Labor Monitoring Solution</p>
+          <h1 style={{ fontFamily: 'Poppins, system-ui, sans-serif', fontSize: '34px', fontStyle: 'italic', fontWeight: 400, color: '#F9FAFB', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+            e-Partogram
+          </h1>
+          <p style={{ color: '#6B7280', fontSize: '13px' }}>Electronic Labour Monitoring · WHO 2020</p>
+          <div style={{ marginTop: '10px' }} className="ai-pulse" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: 700, color: '#22D3EE', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: '10px' }}>
+            <span className="ai-pulse-dot" />
+            ColpAI Engine Active
+          </div>
         </div>
 
-        <div className="glass-card p-8 bg-black/40">
-          {/* Login Mode Tabs */}
-          <div className="flex gap-4 mb-8 bg-white/5 p-2 rounded-xl border border-white/10">
-            <button
-              onClick={() => handleModeChange('doctor')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-lg transition-all font-semibold ${
-                loginMode === 'doctor'
-                  ? 'bg-[#00C9A7] text-[#0A0F1E] shadow-lg'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Stethoscope className="w-5 h-5" />
-              <span className="hidden sm:inline">Doctor</span>
-            </button>
-            <button
-              onClick={() => handleModeChange('admin')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-lg transition-all font-semibold ${
-                loginMode === 'admin'
-                  ? 'bg-[#00C9A7] text-[#0A0F1E] shadow-lg'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Building2 className="w-5 h-5" />
-              <span className="hidden sm:inline">Admin</span>
-            </button>
+        {/* Card */}
+        <div style={{
+          background: 'rgba(17,24,39,0.88)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '20px',
+          padding: '30px',
+          boxShadow: '0 1px 0 rgba(255,255,255,0.05) inset, 0 40px 80px rgba(0,0,0,0.55)',
+        }}>
+
+          {/* Mode tabs */}
+          <div style={{ display: 'flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', marginBottom: '26px' }}>
+            {MODES.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => handleModeChange(id)}
+                style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  padding: '10px 14px', borderRadius: '9px', border: 'none', cursor: 'pointer',
+                  fontSize: '13px', fontWeight: 700, transition: 'all 0.2s ease',
+                  background: mode === id ? 'linear-gradient(135deg, #22D3EE 0%, #0EA5E9 100%)' : 'transparent',
+                  color: mode === id ? '#060D1A' : '#6B7280',
+                  boxShadow: mode === id ? '0 4px 16px rgba(34,211,238,0.3)' : 'none',
+                }}
+              >
+                <Icon style={{ width: '16px', height: '16px' }} />
+                {label}
+              </button>
+            ))}
           </div>
 
-          <h2 className="text-xl font-bold mb-6">
-            {loginMode === 'admin' ? 'Admin Portal' : 'Doctor Login'}
+          <h2 style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontSize: '17px', fontWeight: 700, color: '#E5E7EB', marginBottom: '22px' }}>
+            {mode === 'admin' ? 'Admin Portal Access' : 'Clinician Sign In'}
           </h2>
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+            {/* Email */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
-                {loginMode === 'admin' ? 'Company Email' : 'Hospital Email'}
+              <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B7280', marginBottom: '7px' }}>
+                {mode === 'admin' ? 'Company Email' : 'Hospital Email'}
               </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <input 
-                  type="email" 
+              <div style={{ position: 'relative' }}>
+                <Mail style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: '#4B5563' }} />
+                <input
+                  type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all placeholder:text-slate-600 font-medium"
-                  placeholder={loginMode === 'admin' ? 'admin@company.com' : 'doctor@hospital.com'}
+                  onChange={e => setEmail(e.target.value)}
+                  className="input-field"
+                  style={{ paddingLeft: '42px' }}
+                  placeholder="doctor@hospital.com"
                   required
                 />
               </div>
             </div>
 
+            {/* Password */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <input 
-                  type="password" 
+              <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B7280', marginBottom: '7px' }}>
+                Password
+              </label>
+              <div style={{ position: 'relative' }}>
+                <Lock style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: '#4B5563' }} />
+                <input
+                  type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all placeholder:text-slate-600 font-medium"
+                  onChange={e => setPassword(e.target.value)}
+                  className="input-field"
+                  style={{ paddingLeft: '42px' }}
                   placeholder="••••••••"
                   required
                 />
               </div>
             </div>
 
+            {/* Error */}
             {error && (
-              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+              <div style={{ padding: '12px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', borderRadius: '10px', fontSize: '12px', color: '#F87171', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px' }}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
                 {error}
               </div>
             )}
 
-            <button 
-              type="submit" 
+            {/* Submit */}
+            <button
+              type="submit"
               disabled={loading}
-              className="w-full glass-button py-4 flex items-center justify-center space-x-2 group"
+              style={{
+                marginTop: '6px',
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                padding: '13px 22px',
+                background: 'linear-gradient(135deg, #22D3EE 0%, #0EA5E9 100%)',
+                color: '#060D1A', fontWeight: 800, fontSize: '14px',
+                borderRadius: '11px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                boxShadow: '0 6px 24px rgba(34,211,238,0.35), 0 1px 0 rgba(255,255,255,0.2) inset',
+                transition: 'all 0.2s ease',
+                opacity: loading ? 0.7 : 1,
+              }}
+              onMouseOver={e => !loading && (e.currentTarget.style.transform = 'translateY(-1px)')}
+              onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
             >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  <span className="text-lg">
-                    {loginMode === 'admin' ? 'Access Admin Portal' : 'Enter Dashboard'}
-                  </span>
-                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              {loading
+                ? <Loader2 style={{ width: '18px', height: '18px', animation: 'spin 1s linear infinite' }} />
+                : <>
+                  {mode === 'admin' ? 'Access Admin Portal' : 'Enter Dashboard'}
+                  <ChevronRight style={{ width: '18px', height: '18px' }} />
                 </>
-              )}
+              }
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-white/5 text-center">
-            <p className="text-xs text-slate-500">
-              TanPrish Dynamics Healthcare Solutions &copy; 2026
-            </p>
+          {/* Footer */}
+          <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10px', color: '#4B5563' }}>
+              <Shield style={{ width: '12px', height: '12px' }} />
+              WHO-2020 Compliant
+            </div>
+            <p style={{ fontSize: '10px', color: '#374151' }}>TanPrish Dynamics © 2026</p>
           </div>
         </div>
       </div>

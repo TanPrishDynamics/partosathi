@@ -1,17 +1,38 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { 
-  ArrowLeft, 
-  UserPlus, 
-  Save, 
-  Calendar, 
-  User, 
-  Activity,
-  ChevronRight,
-  Info
-} from 'lucide-react';
+import api from '../services/api';
+import { ArrowLeft, UserPlus, Save, Calendar, User, Activity, ChevronRight, Info, Loader2 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
+
+const FieldLabel = ({ children }) => (
+  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>
+    {children}
+  </label>
+);
+
+const InputWrap = ({ icon: Icon, children }) => (
+  <div style={{ position: 'relative' }}>
+    {Icon && <Icon style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: '#22D3EE', pointerEvents: 'none' }} />}
+    {children}
+  </div>
+);
+
+const inputStyle = (hasIcon = false) => ({
+  width: '100%',
+  paddingLeft: hasIcon ? '48px' : '16px',
+  paddingRight: '16px',
+  paddingTop: '13px',
+  paddingBottom: '13px',
+  background: 'rgba(255,255,255,0.04)',
+  border: '1.5px solid rgba(255,255,255,0.09)',
+  borderRadius: '12px',
+  fontSize: '15px',
+  fontFamily: 'Roboto, sans-serif',
+  color: '#E5E7EB',
+  outline: 'none',
+  transition: 'all 0.2s ease',
+  boxSizing: 'border-box',
+});
 
 const NewPatient = () => {
   const navigate = useNavigate();
@@ -22,7 +43,8 @@ const NewPatient = () => {
     gravida: 1,
     parity: 0,
     gestational_age: '',
-    admission_time: new Date().toISOString().slice(0, 16)
+    admission_time: new Date().toISOString().slice(0, 16),
+    membrane_rupture_time: '',
   });
 
   const handleChange = (e) => {
@@ -30,12 +52,23 @@ const NewPatient = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleFocus = (e) => {
+    e.target.style.borderColor = 'rgba(34,211,238,0.55)';
+    e.target.style.boxShadow = '0 0 0 3px rgba(34,211,238,0.1)';
+    e.target.style.background = 'rgba(34,211,238,0.03)';
+  };
+  const handleBlur = (e) => {
+    e.target.style.borderColor = 'rgba(255,255,255,0.09)';
+    e.target.style.boxShadow = 'none';
+    e.target.style.background = 'rgba(255,255,255,0.04)';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const authHeader = { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } };
-      const resp = await axios.post('/api/patient', formData, authHeader);
+      const resp = await api.post('/api/patient', formData, {
+      });
       navigate(`/dashboard/${resp.data.patient_id}`);
     } catch (err) {
       console.error(err);
@@ -46,110 +79,171 @@ const NewPatient = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#0A0F1E]">
+    <div style={{ display: 'flex', height: '100vh', background: 'radial-gradient(ellipse at top left, #0d1929 0%, #0B1220 55%, #060D18 100%)' }}>
       <Sidebar />
-      
-      <main className="flex-1 overflow-y-auto p-8 relative">
-        <div className="max-w-3xl mx-auto">
-          
-          <button 
+
+      <main style={{ flex: 1, overflowY: 'auto', padding: '40px' }}>
+        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+
+          {/* Back button */}
+          <button
             onClick={() => navigate('/patients')}
-            className="flex items-center space-x-2 text-slate-400 hover:text-white mb-8 transition-colors group cursor-pointer"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '32px',
+              color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: '14px', fontWeight: 500, transition: 'color 0.2s ease',
+            }}
+            onMouseOver={e => e.currentTarget.style.color = '#D1D5DB'}
+            onMouseOut={e => e.currentTarget.style.color = '#6B7280'}
           >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span>Back to Patients</span>
+            <ArrowLeft style={{ width: '16px', height: '16px' }} />
+            Back to Patients
           </button>
 
-          <div className="mb-10">
-            <h1 className="text-3xl font-bold font-serif mb-2">New Admission</h1>
-            <p className="text-slate-400">Enter patient details to initialize the digital partograph</p>
+          {/* Page title */}
+          <div style={{ marginBottom: '32px' }} className="animate-fade-in">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+              <div style={{
+                width: '44px', height: '44px', borderRadius: '13px',
+                background: 'linear-gradient(135deg, rgba(34,211,238,0.15), rgba(14,165,233,0.1))',
+                border: '1px solid rgba(34,211,238,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <UserPlus style={{ width: '20px', height: '20px', color: '#22D3EE' }} />
+              </div>
+              <div>
+                <h1 style={{ fontFamily: 'Poppins, sans-serif', fontSize: '28px', fontWeight: 700, color: '#F9FAFB', margin: 0, letterSpacing: '-0.02em' }}>
+                  New Admission
+                </h1>
+                <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '3px' }}>
+                  Initialize digital partograph for a new patient
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="glass-card p-10 bg-white/5 border-white/10 relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-64 h-64 gradient-teal opacity-5 blur-3xl -mr-32 -mt-32"></div>
+          {/* Form card */}
+          <div
+            className="animate-fade-in"
+            style={{
+              background: 'rgba(15,21,37,0.9)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '22px', padding: '36px',
+              position: 'relative', overflow: 'hidden',
+            }}
+          >
+            {/* Ambient glow */}
+            <div style={{
+              position: 'absolute', top: '-80px', right: '-80px', width: '300px', height: '300px',
+              borderRadius: '50%', pointerEvents: 'none',
+              background: 'radial-gradient(circle, rgba(34,211,238,0.05) 0%, transparent 65%)',
+            }} />
 
-             <form onSubmit={handleSubmit} className="relative z-10 space-y-8">
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="col-span-1 md:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Full Name</label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00C9A7]" />
-                      <input 
-                        type="text" name="name" value={formData.name} onChange={handleChange} required
-                        className="w-full bg-black/20 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                        placeholder="E.g. Jane Doe"
-                      />
-                    </div>
-                  </div>
+            <form onSubmit={handleSubmit} style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
 
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Age (Years)</label>
-                    <input 
-                      type="number" name="age" value={formData.age} onChange={handleChange} required
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                      placeholder="28"
+                {/* Full Name */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <FieldLabel>Full Name</FieldLabel>
+                  <InputWrap icon={User}>
+                    <input type="text" name="name" value={formData.name} onChange={handleChange} required
+                      placeholder="e.g. Jane Doe"
+                      style={inputStyle(true)} onFocus={handleFocus} onBlur={handleBlur}
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Gestational Age (Weeks)</label>
-                    <input 
-                      type="number" name="gestational_age" value={formData.gestational_age} onChange={handleChange} required
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                      placeholder="39"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Gravida</label>
-                    <input 
-                      type="number" name="gravida" value={formData.gravida} onChange={handleChange} required
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Parity</label>
-                    <input 
-                      type="number" name="parity" value={formData.parity} onChange={handleChange} required
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                    />
-                  </div>
-
-                  <div className="col-span-1 md:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Admission Timestamp</label>
-                    <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00C9A7]" />
-                      <input 
-                        type="datetime-local" name="admission_time" value={formData.admission_time} onChange={handleChange} required
-                        className="w-full bg-black/20 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                      />
-                    </div>
-                  </div>
+                  </InputWrap>
                 </div>
 
-                <div className="p-4 bg-teal-500/5 border border-teal-500/10 rounded-2xl flex items-start space-x-3">
-                   <Info className="w-5 h-5 text-[#00C9A7] mt-0.5" />
-                   <p className="text-xs text-slate-400 leading-relaxed">
-                     Initializing a new patient profile will set the baseline for labor monitoring. 
-                     The partograph will automatically start tracking progress from the first observation recorded ≥ 4cm dilation.
-                   </p>
+                {/* Age */}
+                <div>
+                  <FieldLabel>Age (Years)</FieldLabel>
+                  <input type="number" name="age" value={formData.age} onChange={handleChange} required
+                    placeholder="28" style={inputStyle()} onFocus={handleFocus} onBlur={handleBlur}
+                  />
                 </div>
 
-                <div className="pt-6 flex justify-end">
-                   <button 
-                    type="submit" 
-                    disabled={loading}
-                    className="glass-button w-full sm:w-auto px-10 py-4 flex items-center justify-center space-x-2"
-                   >
-                     <UserPlus className="w-5 h-5" />
-                     <span className="text-lg">Register & Start Partograph</span>
-                     {loading ? <Loader2 className="w-5 h-5 animate-spin ml-2" /> : <ChevronRight className="w-5 h-5" />}
-                   </button>
+                {/* Gestational Age */}
+                <div>
+                  <FieldLabel>Gestational Age (Weeks)</FieldLabel>
+                  <input type="number" name="gestational_age" value={formData.gestational_age} onChange={handleChange} required
+                    placeholder="39" style={inputStyle()} onFocus={handleFocus} onBlur={handleBlur}
+                  />
                 </div>
 
-             </form>
+                {/* Gravida */}
+                <div>
+                  <FieldLabel>Gravida</FieldLabel>
+                  <input type="number" name="gravida" value={formData.gravida} onChange={handleChange} required
+                    style={inputStyle()} onFocus={handleFocus} onBlur={handleBlur}
+                  />
+                </div>
+
+                {/* Parity */}
+                <div>
+                  <FieldLabel>Parity</FieldLabel>
+                  <input type="number" name="parity" value={formData.parity} onChange={handleChange} required
+                    style={inputStyle()} onFocus={handleFocus} onBlur={handleBlur}
+                  />
+                </div>
+
+                {/* Admission Time */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <FieldLabel>Admission Timestamp</FieldLabel>
+                  <InputWrap icon={Calendar}>
+                    <input type="datetime-local" name="admission_time" value={formData.admission_time} onChange={handleChange} required
+                      style={inputStyle(true)} onFocus={handleFocus} onBlur={handleBlur}
+                    />
+                  </InputWrap>
+                </div>
+
+                {/* Membrane Rupture */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <FieldLabel>Membrane Rupture Time (Optional)</FieldLabel>
+                  <InputWrap icon={Calendar}>
+                    <input type="datetime-local" name="membrane_rupture_time" value={formData.membrane_rupture_time} onChange={handleChange}
+                      style={inputStyle(true)} onFocus={handleFocus} onBlur={handleBlur}
+                    />
+                  </InputWrap>
+                </div>
+              </div>
+
+              {/* Info banner */}
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: '12px',
+                padding: '16px 20px', borderRadius: '14px', marginTop: '28px',
+                background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.12)',
+              }}>
+                <Info style={{ width: '17px', height: '17px', color: '#22D3EE', flexShrink: 0, marginTop: '2px' }} />
+                <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: 1.6, margin: 0 }}>
+                  Initializing a new patient profile sets the baseline for labor monitoring.
+                  The partograph automatically tracks progress from the first observation recorded at ≥ 4 cm dilation.
+                </p>
+              </div>
+
+              {/* Submit */}
+              <div style={{ marginTop: '28px' }}>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                    padding: '15px 28px',
+                    background: loading ? 'rgba(34,211,238,0.5)' : 'linear-gradient(135deg, #22D3EE 0%, #0EA5E9 100%)',
+                    color: '#030D18', fontWeight: 700, fontSize: '16px',
+                    fontFamily: 'Poppins, sans-serif',
+                    borderRadius: '13px', border: 'none', cursor: loading ? 'wait' : 'pointer',
+                    boxShadow: '0 6px 28px rgba(34,211,238,0.38)',
+                    transition: 'all 0.25s ease',
+                  }}
+                  onMouseOver={e => { if (!loading) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(34,211,238,0.5)'; }}}
+                  onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(34,211,238,0.38)'; }}
+                >
+                  {loading
+                    ? <><Loader2 style={{ width: '18px', height: '18px', animation: 'spin 1s linear infinite' }} /> Registering…</>
+                    : <><UserPlus style={{ width: '18px', height: '18px' }} /> Register &amp; Start Partograph <ChevronRight style={{ width: '18px', height: '18px' }} /></>
+                  }
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </main>

@@ -1,37 +1,183 @@
 """
 e-Partogram Backend — Flask REST API
+Security-hardened: rate limiting, CSP headers, input validation, env-driven config.
 """
 import os
+from dotenv import load_dotenv
+load_dotenv() # Load variables from .env
+import json as _json
+import re
+import warnings
 from datetime import datetime, timedelta, timezone
+from functools import wraps
+import io
+
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import (
     JWTManager, create_access_token,
-    jwt_required, get_jwt_identity,
+    jwt_required, get_jwt_identity, get_jwt,
+    set_access_cookies, unset_jwt_cookies,
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_talisman import Talisman
 from werkzeug.security import generate_password_hash, check_password_hash
-import io
+from marshmallow import ValidationError
 
 from models import db, Admin, Doctor, Patient, Observation, Alert
 from alerts import evaluate_observation
 from pdf_export import generate_pdf
 from clinical_decision_support import process_labor_observation
+from ml.inference import lstm_predictor
+from audio_routes import audio_bp
+from validators import (
+    PatientSchema, ObservationSchema, DoctorCreateSchema,
+    LoginSchema, validate_request
+)
 
 
 # ---------------------------------------------------------------------------
-# App configuration
+# App + Security Configuration
 # ---------------------------------------------------------------------------
+
+FLASK_ENV = os.environ.get("FLASK_ENV", "production")
+IS_DEV    = FLASK_ENV == "development"
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///partogram.db"
+
+# ── Request size limit: 512 KB max (protects against payload flooding) ─────────
+app.config["MAX_CONTENT_LENGTH"] = 512 * 1024
+
+# ── Database ───────────────────────────────────────────────────────────────────
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "DATABASE_URL", "sqlite:///partogram.db"
+)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["JWT_SECRET_KEY"] = "tanprish-epartogram-secret-2026"
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=12)
+
+# ── JWT ───────────────────────────────────────────────────────────────────────
+if IS_DEV:
+    _jwt_secret = os.environ.get(
+        "JWT_SECRET_KEY",
+        "dev-only-insecure-key-do-NOT-use-in-production"
+    )
+    if "dev-only" in _jwt_secret:
+        warnings.warn("[SECURITY] JWT_SECRET_KEY not set — using insecure dev key.",
+                      stacklevel=2)
+else:
+    _jwt_secret = os.environ.get("JWT_SECRET_KEY")
+    if not _jwt_secret or len(_jwt_secret) < 32:
+        raise RuntimeError(
+            "[SECURITY] JWT_SECRET_KEY must be set and at least 32 characters in production. "
+            "Generate one: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+
+app.config["JWT_SECRET_KEY"]         = _jwt_secret
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=8)
+app.config["JWT_ALGORITHM"]           = "HS256"
+
+# ── H-2: JWT via HttpOnly Cookies (XSS-resistant) ─────────────────────────────
+app.config["JWT_TOKEN_LOCATION"]      = ["cookies"]
+app.config["JWT_COOKIE_SECURE"]       = not IS_DEV   # True = HTTPS only in production
+app.config["JWT_COOKIE_SAMESITE"]     = "Lax"
+app.config["JWT_COOKIE_CSRF_PROTECT"] = not IS_DEV   # CSRF protection in production
+app.config["JWT_ACCESS_COOKIE_NAME"]  = "access_token"
 
 db.init_app(app)
 jwt = JWTManager(app)
-CORS(app, origins=["http://localhost:5173", "http://127.0.0.1:5173"])
+
+# ── CORS — must allow credentials for cookie-based auth ──────────────────────
+_cors_origins = _json.loads(
+    os.environ.get(
+        "ALLOWED_ORIGINS",
+        '["http://localhost:5173","http://127.0.0.1:5173","http://localhost:5174","http://localhost:5175"]'
+    )
+)
+CORS(app, origins=_cors_origins, supports_credentials=True)
+
+# ── M-1: Rate Limiter — Redis with memory fallback ───────────────────────────
+_ratelimit_storage = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
+if _ratelimit_storage.startswith("redis://"):
+    try:
+        import redis as _redis_client
+        _r = _redis_client.from_url(_ratelimit_storage, socket_connect_timeout=2)
+        _r.ping()
+        app.logger.info("[RATELIMIT] Redis connected: %s", _ratelimit_storage)
+    except Exception as _re:
+        app.logger.warning("[RATELIMIT] Redis unavailable (%s) — falling back to memory.", _re)
+        _ratelimit_storage = "memory://"
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["500 per day", "100 per hour"],
+    storage_uri=_ratelimit_storage,
+)
+
+# ── HTTP Security Headers (Flask-Talisman) ───────────────────────────────────────────
+CONTENT_SECURITY_POLICY = {
+    "default-src": "'self'",
+    "script-src":  ["'self'"],
+    "style-src":   ["'self'", "'unsafe-inline'",
+                    "https://fonts.googleapis.com"],
+    "font-src":    ["'self'", "https://fonts.gstatic.com"],
+    "img-src":     ["'self'", "data:"],
+    "connect-src": ["'self'"],
+    "frame-ancestors": "'none'",    # X-Frame-Options: DENY equivalent
+}
+Talisman(
+    app,
+    force_https=not IS_DEV,          # HTTPS enforced in production only
+    content_security_policy=CONTENT_SECURITY_POLICY,
+    content_security_policy_nonce_in=["script-src"],
+    strict_transport_security=not IS_DEV,
+    strict_transport_security_max_age=31536000,  # 1 year HSTS
+    frame_options="DENY",
+    referrer_policy="strict-origin-when-cross-origin",
+)
+
+app.register_blueprint(audio_bp)
+
+
+
+# ---------------------------------------------------------------------------
+# Helper Decorators
+# ---------------------------------------------------------------------------
+
+def admin_required():
+    """Decorator: verifies JWT role claim == 'admin' (cryptographically bound at issuance)."""
+    def wrapper(fn):
+        @wraps(fn)
+        @jwt_required()
+        def decorator(*args, **kwargs):
+            claims = get_jwt()
+            if claims.get("role") != "admin":
+                return jsonify({"error": "Admin access required"}), 403
+            return fn(*args, **kwargs)
+        return decorator
+    return wrapper
+
+# ---------------------------------------------------------------------------
+# H-4: Ownership helpers — doctor can only touch their own patients' data
+# ---------------------------------------------------------------------------
+
+def _get_observation_for_doctor(obs_id, doc_id):
+    """Returns observation if requesting doctor owns the patient. Aborts 403 otherwise."""
+    from flask import abort
+    obs = Observation.query.get_or_404(obs_id)
+    patient = Patient.query.get_or_404(obs.patient_id)
+    if patient.doctor_id is not None and patient.doctor_id != doc_id:
+        abort(403)
+    return obs
+
+
+def _get_patient_for_doctor(patient_id_str, doc_id):
+    """Returns patient if requesting doctor owns it. Aborts 403 otherwise."""
+    from flask import abort
+    p = Patient.query.filter_by(patient_id=patient_id_str).first_or_404()
+    if p.doctor_id is not None and p.doctor_id != doc_id:
+        abort(403)
+    return p
 
 
 # ---------------------------------------------------------------------------
@@ -40,11 +186,9 @@ CORS(app, origins=["http://localhost:5173", "http://127.0.0.1:5173"])
 
 def seed_demo_data():
     """Seed a demo admin, demo doctor and two sample patients with observations."""
-    if Admin.query.first() and Doctor.query.first():
-        return  # already seeded
-
-    # Demo admin
-    if not Admin.query.first():
+    
+    # demo admin
+    if not Admin.query.filter_by(email="admin@tanprish-dynamics.com").first():
         admin = Admin(
             name="Admin Manager",
             email="admin@tanprish-dynamics.com",
@@ -53,8 +197,8 @@ def seed_demo_data():
         )
         db.session.add(admin)
 
-    # Demo doctor
-    if not Doctor.query.first():
+    # demo doctor
+    if not Doctor.query.filter_by(email="admin@hospital.com").first():
         doctor = Doctor(
             name="Dr. Priya Sharma",
             email="admin@hospital.com",
@@ -64,9 +208,13 @@ def seed_demo_data():
         db.session.add(doctor)
         db.session.flush()
     else:
-        doctor = Doctor.query.first()
+        doctor = Doctor.query.filter_by(email="admin@hospital.com").first()
 
     # ---- Patient 1: PTH-001 — active labor, progressing well ----
+    if Patient.query.filter_by(patient_id="PTH-001").first():
+        db.session.commit()
+        return # already seeded patients
+
     now = datetime.utcnow()
     admission_1 = now - timedelta(hours=10)
     p1 = Patient(
@@ -179,49 +327,140 @@ def seed_demo_data():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/auth/admin-login", methods=["POST"])
+@limiter.limit("5 per minute; 20 per hour")   # brute-force protection
 def admin_login():
-    """Admin/Company login endpoint"""
-    data = request.get_json()
-    email = data.get("email", "").strip().lower()
-    password = data.get("password", "")
+    """Admin/Company login endpoint — sets JWT as HttpOnly cookie."""
+    payload, err = validate_request(LoginSchema, request.get_json())
+    if err:
+        return jsonify(err), 422
 
-    admin = Admin.query.filter_by(email=email).first()
-    if not admin or not check_password_hash(admin.password_hash, password):
+    admin = Admin.query.filter_by(email=payload["email"]).first()
+    if not admin or not check_password_hash(admin.password_hash, payload["password"]):
         return jsonify({"error": "Invalid email or password"}), 401
 
-    token = create_access_token(identity=str(admin.id))
-    return jsonify({
-        "token": token,
-        "user": admin.to_dict(),
-        "role": "admin"
-    })
+    token = create_access_token(
+        identity=str(admin.id),
+        additional_claims={"role": "admin", "type": "admin"}
+    )
+    resp = jsonify({"user": admin.to_dict(), "role": "admin"})
+    set_access_cookies(resp, token)   # H-2: token in HttpOnly cookie, not body
+    return resp
 
 
 @app.route("/api/auth/login", methods=["POST"])
+@limiter.limit("10 per minute; 30 per hour")   # brute-force protection
 def login():
-    """Doctor login endpoint"""
-    data = request.get_json()
-    email = data.get("email", "").strip().lower()
-    password = data.get("password", "")
+    """Doctor login endpoint — sets JWT as HttpOnly cookie."""
+    payload, err = validate_request(LoginSchema, request.get_json())
+    if err:
+        return jsonify(err), 422
 
-    doctor = Doctor.query.filter_by(email=email).first()
-    if not doctor or not check_password_hash(doctor.password_hash, password):
+    doctor = Doctor.query.filter_by(email=payload["email"]).first()
+    if not doctor or not check_password_hash(doctor.password_hash, payload["password"]):
         return jsonify({"error": "Invalid email or password"}), 401
 
-    token = create_access_token(identity=str(doctor.id))
-    return jsonify({
-        "token": token,
-        "doctor": {"id": doctor.id, "name": doctor.name, "email": doctor.email},
+    token = create_access_token(
+        identity=str(doctor.id),
+        additional_claims={"role": "doctor", "type": "doctor"}
+    )
+    resp = jsonify({
+        "doctor": {"id": doctor.id, "name": doctor.name, "email": doctor.email,
+                   "license_number": doctor.license_number, "hospital": doctor.hospital},
         "role": "doctor"
     })
+    set_access_cookies(resp, token)   # H-2: token in HttpOnly cookie, not body
+    return resp
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    """Clears the JWT cookie — secure session termination."""
+    resp = jsonify({"message": "Logged out successfully"})
+    unset_jwt_cookies(resp)
+    return resp
 
 
 @app.route("/api/auth/me", methods=["GET"])
 @jwt_required()
 def me():
-    doc_id = int(get_jwt_identity())
-    doctor = Doctor.query.get_or_404(doc_id)
-    return jsonify({"id": doctor.id, "name": doctor.name, "email": doctor.email})
+    user_id = int(get_jwt_identity())
+    doctor = Doctor.query.get(user_id)
+    if doctor:
+        return jsonify({"id": doctor.id, "name": doctor.name, "email": doctor.email, "license_number": doctor.license_number, "hospital": doctor.hospital, "role": "doctor"})
+    admin = Admin.query.get_or_404(user_id)
+    return jsonify({"id": admin.id, "name": admin.name, "email": admin.email, "company": admin.company, "role": "admin"})
+
+
+# ---------------------------------------------------------------------------
+# Admin Doctor Management Routes
+# ---------------------------------------------------------------------------
+
+@app.route("/api/admin/doctors", methods=["GET"])
+@admin_required()
+def list_doctors_admin():
+    doctors = Doctor.query.all()
+    return jsonify([{
+        "id": d.id,
+        "name": d.name,
+        "email": d.email,
+        "license_number": d.license_number,
+        "hospital": d.hospital
+    } for d in doctors])
+
+
+@app.route("/api/admin/doctors", methods=["POST"])
+@admin_required()
+def create_doctor_admin():
+    payload, err = validate_request(DoctorCreateSchema, request.get_json())
+    if err:
+        return jsonify(err), 422
+
+    if Doctor.query.filter_by(email=payload["email"]).first():
+        return jsonify({"error": "Doctor email already exists"}), 400
+
+    doctor = Doctor(
+        name=payload["name"],
+        email=payload["email"],
+        password_hash=generate_password_hash(payload["password"]),
+        license_number=payload.get("license_number"),
+        hospital=payload.get("hospital", "General Hospital")
+    )
+    db.session.add(doctor)
+    db.session.commit()
+    return jsonify({"success": True, "doctor": {"id": doctor.id, "name": doctor.name, "email": doctor.email}}), 201
+
+
+@app.route("/api/admin/doctors/<int:doctor_id>", methods=["PATCH"])
+@admin_required()
+def update_doctor_admin(doctor_id):
+    doctor = Doctor.query.get_or_404(doctor_id)
+    data = request.get_json()
+    
+    if "name" in data: doctor.name = data["name"]
+    if "email" in data: 
+        existing = Doctor.query.filter_by(email=data["email"]).first()
+        if existing and existing.id != doctor.id:
+            return jsonify({"error": "Email already in use"}), 400
+        doctor.email = data["email"]
+    if "license_number" in data: doctor.license_number = data["license_number"]
+    if "hospital" in data: doctor.hospital = data["hospital"]
+    if "password" in data:
+        doctor.password_hash = generate_password_hash(data["password"])
+        
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+@app.route("/api/admin/doctors/<int:doctor_id>", methods=["DELETE"])
+@admin_required()
+def delete_doctor_admin(doctor_id):
+    doctor = Doctor.query.get_or_404(doctor_id)
+    db.session.delete(doctor)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -250,17 +489,20 @@ def list_patients():
 @jwt_required()
 def create_patient():
     doc_id = int(get_jwt_identity())
-    data = request.get_json()
 
-    # Auto-generate patient_id
+    # ── Schema validation ─────────────────────────────────────────────────────
+    payload, err = validate_request(PatientSchema, request.get_json())
+    if err:
+        return jsonify(err), 422
+
+    # Auto-generate patient_id (collision-safe)
     count = Patient.query.count() + 1
     patient_id = f"PTH-{count:03d}"
-    # Ensure uniqueness
     while Patient.query.filter_by(patient_id=patient_id).first():
         count += 1
         patient_id = f"PTH-{count:03d}"
 
-    admission_time = data.get("admission_time")
+    admission_time = payload.get("admission_time")
     if admission_time:
         try:
             admission_time = datetime.fromisoformat(admission_time.replace("Z", "+00:00"))
@@ -269,14 +511,24 @@ def create_patient():
     else:
         admission_time = datetime.utcnow()
 
+    rupture_time = payload.get("membrane_rupture_time")
+    if rupture_time:
+        try:
+            rupture_time = datetime.fromisoformat(rupture_time.replace("Z", "+00:00"))
+        except Exception:
+            rupture_time = None
+    else:
+        rupture_time = None
+
     p = Patient(
         patient_id=patient_id,
-        name=data["name"],
-        age=int(data["age"]),
-        gravida=int(data.get("gravida", 1)),
-        parity=int(data.get("parity", 0)),
-        gestational_age=int(data["gestational_age"]),
+        name=payload["name"],
+        age=payload["age"],
+        gravida=payload["gravida"],
+        parity=payload["parity"],
+        gestational_age=payload["gestational_age"],
         admission_time=admission_time,
+        membrane_rupture_time=rupture_time,
         doctor_id=doc_id,
     )
     db.session.add(p)
@@ -287,8 +539,60 @@ def create_patient():
 @app.route("/api/patient/<patient_id>", methods=["GET"])
 @jwt_required()
 def get_patient(patient_id):
-    p = Patient.query.filter_by(patient_id=patient_id).first_or_404()
+    doc_id = int(get_jwt_identity())
+    p = _get_patient_for_doctor(patient_id, doc_id)  # H-4: ownership check
     return jsonify(p.to_dict())
+
+
+@app.route("/api/patient/<patient_id>", methods=["PATCH"])
+@jwt_required()
+def update_patient(patient_id):
+    doc_id = int(get_jwt_identity())
+    p = _get_patient_for_doctor(patient_id, doc_id)   # H-4: ownership check
+
+    # H-5: Schema validation — no raw dict access on write paths
+    payload, err = validate_request(PatientSchema, request.get_json())
+    if err:
+        return jsonify(err), 422
+
+    if "name" in payload: p.name = payload["name"]
+    if "age" in payload: p.age = int(payload["age"])
+    if "gravida" in payload: p.gravida = int(payload["gravida"])
+    if "parity" in payload: p.parity = int(payload["parity"])
+    if "gestational_age" in payload: p.gestational_age = int(payload["gestational_age"])
+
+    if "admission_time" in payload and payload["admission_time"]:
+        try:
+            p.admission_time = datetime.fromisoformat(payload["admission_time"].replace("Z", "+00:00"))
+        except Exception:
+            pass
+
+    if "membrane_rupture_time" in payload:
+        try:
+            p.membrane_rupture_time = (
+                datetime.fromisoformat(payload["membrane_rupture_time"].replace("Z", "+00:00"))
+                if payload["membrane_rupture_time"] else None
+            )
+        except Exception:
+            pass
+
+    db.session.commit()
+    refresh_patient_alerts(p.id)
+    return jsonify(p.to_dict())
+
+
+@app.route("/api/patient/<patient_id>/status", methods=["PATCH"])
+@jwt_required()
+def update_patient_status(patient_id):
+    doc_id = int(get_jwt_identity())
+    p = _get_patient_for_doctor(patient_id, doc_id)   # H-4: ownership check
+    data = request.get_json()
+    new_status = data.get("status")
+    if new_status in ["Active", "Completed", "Inactive"]:
+        p.status = new_status
+        db.session.commit()
+        return jsonify({"success": True, "status": p.status})
+    return jsonify({"error": "Invalid status"}), 400
 
 
 # ---------------------------------------------------------------------------
@@ -368,9 +672,99 @@ def get_observations(patient_id):
     return jsonify([o.to_dict() for o in obs])
 
 
+@app.route("/api/observation/<int:obs_id>", methods=["PATCH"])
+@jwt_required()
+def update_observation(obs_id):
+    doc_id = int(get_jwt_identity())
+    obs = _get_observation_for_doctor(obs_id, doc_id)  # H-4: IDOR protection
+    data = request.get_json()
+    
+    def nullable_float(val):
+        return float(val) if val not in (None, "", "null") else None
+    def nullable_int(val):
+        return int(val) if val not in (None, "", "null") else None
+
+    if "timestamp" in data:
+        try:
+            obs.timestamp = datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
+        except Exception:
+            pass
+        
+    if "cervical_dilation" in data: obs.cervical_dilation = nullable_float(data["cervical_dilation"])
+    if "head_station" in data: obs.head_station = nullable_float(data["head_station"])
+    if "fetal_heart_rate" in data: obs.fetal_heart_rate = nullable_int(data["fetal_heart_rate"])
+    if "amniotic_fluid" in data: obs.amniotic_fluid = data["amniotic_fluid"]
+    if "moulding" in data: obs.moulding = data["moulding"]
+    if "contraction_freq" in data: obs.contraction_freq = nullable_float(data["contraction_freq"])
+    if "contraction_duration" in data: obs.contraction_duration = nullable_int(data["contraction_duration"])
+    if "maternal_pulse" in data: obs.maternal_pulse = nullable_int(data["maternal_pulse"])
+    if "bp_systolic" in data: obs.bp_systolic = nullable_int(data["bp_systolic"])
+    if "bp_diastolic" in data: obs.bp_diastolic = nullable_int(data["bp_diastolic"])
+    if "temperature" in data: obs.temperature = nullable_float(data["temperature"])
+    if "urine_protein" in data: obs.urine_protein = data["urine_protein"]
+    if "urine_ketones" in data: obs.urine_ketones = data["urine_ketones"]
+    if "urine_volume" in data: obs.urine_volume = nullable_int(data["urine_volume"])
+
+    db.session.commit()
+    refresh_patient_alerts(obs.patient_id)
+    return jsonify(obs.to_dict())
+
+
+@app.route("/api/observation/<int:obs_id>", methods=["DELETE"])
+@jwt_required()
+def delete_observation(obs_id):
+    doc_id = int(get_jwt_identity())
+    obs = _get_observation_for_doctor(obs_id, doc_id)  # H-4: IDOR protection
+    patient_id = obs.patient_id
+    db.session.delete(obs)
+    db.session.commit()
+    refresh_patient_alerts(patient_id)
+    return jsonify({"success": True})
+
+
+def refresh_patient_alerts(patient_id):
+    """Deletes all existing alerts for a patient and re-calculates everything."""
+    # Store acknowledged alerts to try and preserve them
+    old_alerts = Alert.query.filter_by(patient_id=patient_id, acknowledged=True).all()
+    ack_keys = set((a.alert_type, a.observation_id) for a in old_alerts)
+    
+    Alert.query.filter_by(patient_id=patient_id).delete()
+    db.session.flush()
+    
+    all_obs = Observation.query.filter_by(patient_id=patient_id).order_by(Observation.timestamp).all()
+    for obs in all_obs:
+        triggered = evaluate_observation(obs, all_obs)
+        for a_data in triggered:
+            new_al = Alert(
+                patient_id=patient_id,
+                timestamp=obs.timestamp,
+                observation_id=obs.id,
+                **a_data
+            )
+            # Restore acknowledgment if it was there before and observation hasn't changed its identity
+            if (new_al.alert_type, new_al.observation_id) in ack_keys:
+                new_al.acknowledged = True
+            db.session.add(new_al)
+    db.session.commit()
+
+
 # ---------------------------------------------------------------------------
 # Clinical Decision Support Routes
 # ---------------------------------------------------------------------------
+
+@app.route("/api/cds/predict-delivery/<patient_id>", methods=["GET"])
+@jwt_required()
+def predict_delivery_time(patient_id):
+    p = Patient.query.filter_by(patient_id=patient_id).first_or_404()
+    observations = Observation.query.filter_by(patient_id=p.id).order_by(Observation.timestamp).all()
+    
+    # Format observations to dicts for model
+    obs_dicts = [o.to_dict() for o in observations]
+    
+    # Run through phase 3 deep learning architecture
+    prediction = lstm_predictor.predict(obs_dicts, p.to_dict())
+    return jsonify(prediction), 200
+
 
 @app.route("/api/cds/analyze-observation", methods=["POST"])
 @jwt_required()
@@ -451,7 +845,8 @@ def analyze_observation_cds():
         }), 200
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.error("CDS analyze-observation error: %s", e, exc_info=True)
+        return jsonify({"error": "An internal error occurred. Please contact support."}), 500
 
 
 @app.route("/api/cds/batch-analyze", methods=["POST"])
@@ -528,7 +923,8 @@ def batch_analyze_observations():
         }), 200
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.error("CDS batch-analyze error: %s", e, exc_info=True)
+        return jsonify({"error": "An internal error occurred. Please contact support."}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -589,4 +985,7 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         seed_demo_data()
-    app.run(debug=True, port=5001)
+    # ── Security: debug mode driven by env, never hardcoded ──────────────────
+    _debug = os.environ.get("FLASK_ENV", "production") == "development"
+    _port  = int(os.environ.get("PORT", 5001))
+    app.run(debug=_debug, port=_port)

@@ -28,6 +28,7 @@ class Doctor(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     license_number = db.Column(db.String(50))
+    hospital = db.Column(db.String(120), default="TanPrish Dynamics Medical Center")
     patients = db.relationship("Patient", backref="doctor", lazy=True)
 
 
@@ -41,6 +42,8 @@ class Patient(db.Model):
     parity = db.Column(db.Integer, default=0)
     gestational_age = db.Column(db.Integer, nullable=False)  # weeks
     admission_time = db.Column(db.DateTime, default=datetime.utcnow)
+    membrane_rupture_time = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(20), default="Active")
     doctor_id = db.Column(db.Integer, db.ForeignKey("doctors.id"), nullable=True)
     observations = db.relationship("Observation", backref="patient", lazy=True, cascade="all, delete-orphan")
     alerts = db.relationship("Alert", backref="patient", lazy=True, cascade="all, delete-orphan")
@@ -52,9 +55,11 @@ class Patient(db.Model):
             "name": self.name,
             "age": self.age,
             "gravida": self.gravida,
-            "parity": self.parity,
+            " parity": self.parity,
             "gestational_age": self.gestational_age,
             "admission_time": self.admission_time.isoformat() if self.admission_time else None,
+            "membrane_rupture_time": self.membrane_rupture_time.isoformat() if self.membrane_rupture_time else None,
+            "status": self.status,
             "doctor_id": self.doctor_id,
         }
 
