@@ -185,24 +185,43 @@ def _get_patient_for_doctor(patient_id_str, doc_id):
 # ---------------------------------------------------------------------------
 
 def seed_demo_data():
-    """Seed a demo admin, demo doctor and two sample patients with observations."""
-    
-    # demo admin
+    """Seed a demo admin, demo doctor and sample patients.
+    M-4: Passwords read from SEED_ADMIN_PASSWORD env var — never hardcoded.
+    Existing users are NEVER overwritten.
+    """
+    # M-4: Read seed password from env — warn in dev, raise in production
+    _seed_pw = os.environ.get("SEED_ADMIN_PASSWORD", "")
+    if not _seed_pw:
+        if IS_DEV:
+            import warnings
+            warnings.warn(
+                "[SECURITY] SEED_ADMIN_PASSWORD not set — using insecure default 'ChangeMe#2026'. "
+                "Set SEED_ADMIN_PASSWORD in .env before deploying.",
+                stacklevel=2
+            )
+            _seed_pw = "ChangeMe#2026"   # dev-only fallback, never for production
+        else:
+            raise RuntimeError(
+                "[SECURITY] SEED_ADMIN_PASSWORD must be set in production. "
+                "Add it to your .env file."
+            )
+
+    # demo admin — only created if it doesn't already exist
     if not Admin.query.filter_by(email="admin@tanprish-dynamics.com").first():
         admin = Admin(
             name="Admin Manager",
             email="admin@tanprish-dynamics.com",
-            password_hash=generate_password_hash("admin123"),
+            password_hash=generate_password_hash(_seed_pw),
             company="TanPrish Dynamics",
         )
         db.session.add(admin)
 
-    # demo doctor
+    # demo doctor — only created if it doesn't already exist
     if not Doctor.query.filter_by(email="admin@hospital.com").first():
         doctor = Doctor(
             name="Dr. Priya Sharma",
             email="admin@hospital.com",
-            password_hash=generate_password_hash("admin123"),
+            password_hash=generate_password_hash(_seed_pw),
             license_number="MH-2026-001",
         )
         db.session.add(doctor)
@@ -470,19 +489,50 @@ def delete_doctor_admin(doctor_id):
 @app.route("/api/patients", methods=["GET"])
 @jwt_required()
 def list_patients():
-    patients = Patient.query.order_by(Patient.admission_time.desc()).all()
-    result = []
-    for p in patients:
+    """
+    GET /api/patients
+    M-5: Supports optional pagination via ?page=N&limit=M query params.
+    Backward compatible:
+      - No params      → returns flat array (existing frontend works unchanged)
+      - ?page=N        → returns paginated envelope {data, page, limit, total, pages}
+    Both modes add X-Total-Count and X-Total-Pages headers for client awareness.
+    """
+    page_param = request.args.get("page", type=int)
+    limit      = min(int(request.args.get("limit", 50)), 200)  # cap at 200
+
+    base_query = Patient.query.order_by(Patient.admission_time.desc())
+
+    def _enrich(p):
         d = p.to_dict()
-        # Add alert counts
         alerts = Alert.query.filter_by(patient_id=p.id).all()
         d["alert_counts"] = {
-            "red":    sum(1 for a in alerts if a.severity == "red" and not a.acknowledged),
+            "red":    sum(1 for a in alerts if a.severity == "red"    and not a.acknowledged),
             "yellow": sum(1 for a in alerts if a.severity == "yellow" and not a.acknowledged),
         }
         d["observation_count"] = Observation.query.filter_by(patient_id=p.id).count()
-        result.append(d)
-    return jsonify(result)
+        return d
+
+    if page_param is not None:
+        # ── Paginated mode (new, opt-in) ────────────────────────────────────────────
+        pag = base_query.paginate(page=page_param, per_page=limit, error_out=False)
+        result = [_enrich(p) for p in pag.items]
+        resp = jsonify({
+            "data":  result,
+            "page":  pag.page,
+            "limit": limit,
+            "total": pag.total,
+            "pages": pag.pages,
+        })
+        resp.headers["X-Total-Count"] = pag.total
+        resp.headers["X-Total-Pages"] = pag.pages
+        return resp
+    else:
+        # ── Legacy mode — flat array, backward compatible ──────────────────────────
+        patients = base_query.all()
+        result = [_enrich(p) for p in patients]
+        resp = jsonify(result)
+        resp.headers["X-Total-Count"] = len(result)
+        return resp
 
 
 @app.route("/api/patient", methods=["POST"])
