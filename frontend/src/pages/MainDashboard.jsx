@@ -1,210 +1,173 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import Sidebar from '../components/Sidebar';
 import {
-  Activity, Users, TrendingUp, AlertCircle, Cpu,
-  ArrowRight, ShieldCheck, Zap, Calendar,
-  BookOpen, ExternalLink, CheckCircle2, FlaskConical, Globe,
+  Activity, Users, AlertCircle, ArrowRight,
+  ShieldCheck, TrendingUp, Heart, Clock,
+  CheckCircle2, ExternalLink,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-/* ─── KPI Card ──────────────────────────────────────────────────────────── */
-const KpiCard = ({ value, label, sub, accent = '#22D3EE', icon: Icon, delay = 0 }) => {
-  const [hovered, setHovered] = useState(false);
+/* ── Animated count-up hook ─────────────────────────────────────────────── */
+function useCountUp(target, duration = 1000, delay = 0) {
+  const [value, setValue] = useState(0);
+  const startRef = useRef(null);
+
+  useEffect(() => {
+    if (target === 0) return;
+    const timeout = setTimeout(() => {
+      const start = performance.now();
+      const step = (now) => {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setValue(Math.round(eased * target));
+        if (progress < 1) requestAnimationFrame(step);
+      };
+      startRef.current = requestAnimationFrame(step);
+    }, delay);
+    return () => {
+      clearTimeout(timeout);
+      if (startRef.current) cancelAnimationFrame(startRef.current);
+    };
+  }, [target, duration, delay]);
+
+  return value;
+}
+
+/* ── KPI Card ──────────────────────────────────────────────────────────── */
+const KpiCard = ({ value, label, sub, borderColor = '#E5E7EB', icon: Icon, iconBg = '#EFF6FF', iconColor = '#2563EB', delay = 0, suffix = '' }) => {
+  const count = useCountUp(typeof value === 'number' ? value : 0, 1000, delay);
+  const displayValue = typeof value === 'number' ? `${count}${suffix}` : value;
+
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="animate-fade-in"
-      style={{
-        animationDelay: `${delay}s`,
-        background: hovered ? 'rgba(22,30,50,0.95)' : 'rgba(15,21,37,0.85)',
-        border: `1px solid ${hovered ? `${accent}30` : 'rgba(255,255,255,0.07)'}`,
-        borderRadius: '20px',
-        padding: '24px',
-        position: 'relative', overflow: 'hidden',
-        transform: hovered ? 'translateY(-3px)' : 'translateY(0)',
-        boxShadow: hovered
-          ? `0 20px 48px rgba(0,0,0,0.5), 0 0 28px ${accent}15`
-          : '0 4px 20px rgba(0,0,0,0.25)',
-        transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
-      }}
-    >
-      {/* Ambient glow */}
-      <div style={{
-        position: 'absolute', top: '-30px', right: '-30px', width: '130px', height: '130px',
-        borderRadius: '50%', pointerEvents: 'none',
-        background: `radial-gradient(circle, ${accent}18 0%, transparent 70%)`,
-        opacity: hovered ? 1 : 0.5, transition: 'opacity 0.3s ease',
-      }} />
-
-      {/* Left status bar */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, width: '3px', height: '100%',
-        background: `linear-gradient(180deg, ${accent}, ${accent}60)`,
-        borderRadius: '20px 0 0 20px',
-      }} />
-
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+    <div style={{
+      flex: 1, minWidth: '170px',
+      padding: '20px', borderRadius: '8px',
+      background: '#FFFFFF',
+      border: `1px solid ${borderColor}`,
+      borderTop: `3px solid ${iconColor}`,
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      position: 'relative',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
         <div style={{
-          width: '40px', height: '40px', borderRadius: '12px',
-          background: `${accent}14`, border: `1px solid ${accent}28`,
+          width: '36px', height: '36px', borderRadius: '8px',
+          background: iconBg,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Icon style={{ width: '18px', height: '18px', color: accent }} />
+          <Icon style={{ width: '17px', height: '17px', color: iconColor }} />
         </div>
-        <div style={{
-          width: '8px', height: '8px', borderRadius: '50%',
-          background: accent, marginTop: '6px',
-          boxShadow: `0 0 8px ${accent}90`,
-        }} />
       </div>
 
-      <p style={{
-        fontFamily: 'Roboto Mono, monospace', fontSize: '32px', fontWeight: 700,
-        color: '#F9FAFB', margin: '0 0 4px', lineHeight: 1,
-      }}>
-        {value}
-      </p>
-      <p style={{ fontSize: '12px', fontWeight: 600, color: '#6B7280', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+      <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '28px', fontWeight: 700, color: '#111827', lineHeight: 1 }}>
+        {displayValue}
+      </div>
+      <div style={{ fontSize: '12px', fontWeight: 600, color: '#6B7280', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {label}
-      </p>
-      {sub && <p style={{ fontSize: '11px', color: '#374151', marginTop: '4px' }}>{sub}</p>}
+      </div>
+      {sub && <div style={{ fontSize: '11.5px', color: '#9CA3AF', marginTop: '3px' }}>{sub}</div>}
     </div>
   );
 };
 
-/* ─── Info row for clinician card ──────────────────────────────────────── */
-const InfoCell = ({ label, value }) => (
-  <div>
-    <p style={{
-      fontSize: '10px', color: '#4B5563', textTransform: 'uppercase',
-      letterSpacing: '0.12em', fontWeight: 600, marginBottom: '6px',
-    }}>{label}</p>
-    <p style={{ fontSize: '14px', fontWeight: 600, color: '#D1D5DB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-      {value}
-    </p>
-  </div>
-);
-
-/* ─── Guideline Card ─────────────────────────────────────────────────────── */
-const GuidelineCard = ({ accent, tag, tagColor, org, title, description, points, icon: Icon, link }) => {
-  const [hovered, setHovered] = useState(false);
+/* ── Patient row ─────────────────────────────────────────────────────── */
+const PatientRow = ({ patient, index, onOpen }) => {
+  const isRed    = patient.alert_counts?.red > 0;
+  const isAmber  = !isRed && patient.alert_counts?.amber > 0;
+  const statusColor = isRed ? '#DC2626' : isAmber ? '#F59E0B' : '#16A34A';
+  const statusLabel = isRed ? 'CRITICAL' : isAmber ? 'ALERT' : 'NORMAL';
+  const statusBg    = isRed ? '#FEF2F2' : isAmber ? '#FFFBEB' : '#F0FDF4';
+  const statusBorder = isRed ? '#FECACA' : isAmber ? '#FDE68A' : '#BBF7D0';
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onClick={() => onOpen(patient.patient_id)}
       style={{
-        background: hovered ? 'rgba(22,30,50,0.95)' : 'rgba(15,21,37,0.85)',
-        border: `1px solid ${hovered ? `${accent}30` : 'rgba(255,255,255,0.07)'}`,
-        borderRadius: '18px', padding: '22px',
-        position: 'relative', overflow: 'hidden',
-        transform: hovered ? 'translateY(-3px)' : 'translateY(0)',
-        boxShadow: hovered
-          ? `0 20px 48px rgba(0,0,0,0.5), 0 0 28px ${accent}12`
-          : '0 4px 20px rgba(0,0,0,0.2)',
-        transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
+        display: 'flex', alignItems: 'center', gap: '12px',
+        padding: '11px 14px', borderRadius: '6px', cursor: 'pointer',
+        background: isRed ? '#FEF2F2' : '#FFFFFF',
+        border: `1px solid ${isRed ? '#FECACA' : '#E5E7EB'}`,
+        transition: 'all 0.15s ease',
       }}
+      onMouseOver={e => { e.currentTarget.style.background = '#F9FAFB'; e.currentTarget.style.borderColor = '#D1D5DB'; }}
+      onMouseOut={e => { e.currentTarget.style.background = isRed ? '#FEF2F2' : '#FFFFFF'; e.currentTarget.style.borderColor = isRed ? '#FECACA' : '#E5E7EB'; }}
     >
-      {/* Left accent bar */}
+      {/* Status dot */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, width: '3px', height: '100%',
-        background: `linear-gradient(180deg, ${accent}, ${accent}50)`,
-        borderRadius: '18px 0 0 18px',
-        boxShadow: hovered ? `0 0 12px ${accent}` : 'none',
-        transition: 'box-shadow 0.3s ease',
+        width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
+        background: statusColor,
+        animation: isRed ? 'pulse-soft 1.5s infinite' : 'none',
       }} />
 
-      {/* Ambient glow top-right */}
+      {/* Avatar */}
       <div style={{
-        position: 'absolute', top: '-30px', right: '-30px', width: '140px', height: '140px',
-        borderRadius: '50%', pointerEvents: 'none',
-        background: `radial-gradient(circle, ${accent}18 0%, transparent 65%)`,
-        opacity: hovered ? 1 : 0.4, transition: 'opacity 0.3s ease',
-      }} />
-
-      <div style={{ paddingLeft: '8px', position: 'relative', zIndex: 1 }}>
-        {/* Header row */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
-              background: `${accent}14`, border: `1px solid ${accent}28`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Icon style={{ width: '16px', height: '16px', color: accent }} />
-            </div>
-            {/* Tag */}
-            <span style={{
-              padding: '3px 9px', borderRadius: '99px',
-              fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
-              background: `${tagColor}12`, color: tagColor, border: `1px solid ${tagColor}25`,
-            }}>
-              {tag}
-            </span>
-          </div>
-
-          {/* External link */}
-          {link && (
-            <a
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '4px',
-                padding: '4px 10px', borderRadius: '8px',
-                background: hovered ? `${accent}12` : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${hovered ? `${accent}30` : 'rgba(255,255,255,0.07)'}`,
-                color: hovered ? accent : '#6B7280',
-                fontSize: '11px', fontWeight: 600, textDecoration: 'none',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              <ExternalLink style={{ width: '10px', height: '10px' }} />
-              View
-            </a>
-          )}
-        </div>
-
-        {/* Org + Title */}
-        <p style={{ fontSize: '11px', color: '#4B5563', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>
-          {org}
-        </p>
-        <h3 style={{
-          fontFamily: 'Poppins, sans-serif', fontSize: '15px', fontWeight: 700,
-          color: hovered ? '#F9FAFB' : '#E2E8F0', margin: '0 0 10px', lineHeight: 1.3,
-          transition: 'color 0.2s ease',
-        }}>
-          {title}
-        </h3>
-        <p style={{ fontSize: '12px', color: '#6B7280', lineHeight: 1.6, marginBottom: '14px' }}>
-          {description}
-        </p>
-
-        {/* Bullet points */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          {points.map((pt, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <div style={{
-                width: '5px', height: '5px', borderRadius: '50%', marginTop: '6px',
-                background: accent, flexShrink: 0,
-                boxShadow: hovered ? `0 0 6px ${accent}` : 'none',
-                transition: 'box-shadow 0.3s ease',
-              }} />
-              <span style={{ fontSize: '12px', color: '#94A3B8', lineHeight: 1.5 }}>{pt}</span>
-            </div>
-          ))}
-        </div>
+        width: '32px', height: '32px', borderRadius: '6px', flexShrink: 0,
+        background: statusBg, border: `1px solid ${statusBorder}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '13px', fontWeight: 700, color: statusColor }}>
+          {patient.name?.charAt(0)?.toUpperCase() || '?'}
+        </span>
       </div>
+
+      {/* Name + ID */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: '13px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {patient.name}
+        </p>
+        <p style={{ fontSize: '11px', color: '#9CA3AF', margin: '2px 0 0', fontFamily: 'DM Mono, monospace' }}>
+          ID: {patient.patient_id} · {patient.gestational_age}w GA
+        </p>
+      </div>
+
+      {/* Status badge */}
+      <div style={{
+        padding: '2px 8px', borderRadius: '4px',
+        background: statusBg, border: `1px solid ${statusBorder}`,
+        fontSize: '10px', fontWeight: 700, color: statusColor,
+        letterSpacing: '0.06em',
+        flexShrink: 0,
+      }}>
+        {statusLabel}
+      </div>
+
+      <ArrowRight style={{ width: '13px', height: '13px', color: '#D1D5DB', flexShrink: 0 }} />
     </div>
   );
 };
+
+/* ── Guidelines data ─────────────────────────────────────────────────── */
+const GUIDELINES = [
+  {
+    tag: 'WHO 2020', org: 'World Health Organization',
+    title: 'Modified WHO Partograph Protocol',
+    desc: 'Latent phase monitoring, 1-hour action-to-alert ratio, multi-parameter concurrent tracking.',
+    color: '#2563EB', icon: ShieldCheck,
+    link: 'https://www.who.int/publications/i/item/9789240014978',
+    points: ['Latent phase: 0–4 cm', 'Active phase: ≥4 cm', 'Alert line: 1 cm/hr'],
+  },
+  {
+    tag: 'FIGO 2015', org: 'Intl Federation Gynecology',
+    title: 'CTG Interpretation Framework',
+    desc: 'Fetal heart rate classification: Normal / Suspicious / Pathological — with intervention thresholds.',
+    color: '#16A34A', icon: Heart,
+    link: 'https://www.figo.org',
+    points: ['FHR baseline: 110–160 bpm', 'Decelerations: Type I / II / III', 'Variability assessment'],
+  },
+  {
+    tag: 'ACOG 2014', org: 'American College OB/GYN',
+    title: 'Safe Prevention of Cesarean',
+    desc: 'Evidence-based criteria for labor dystocia diagnosis and cesarean decision timing.',
+    color: '#F59E0B', icon: CheckCircle2,
+    link: 'https://www.acog.org',
+    points: ['Arrest at ≥6 cm: 4 hrs adequate', 'Arrest in 2nd stage: 3 hrs nulliparous', 'Fetal descent criteria'],
+  },
+];
 
 /* ─── Page ──────────────────────────────────────────────────────────────── */
 const MainDashboard = () => {
-  const [user, setUser] = useState(null);
+  const [user, setUser]       = useState(null);
   const [patients, setPatients] = useState([]);
   const navigate = useNavigate();
 
@@ -212,252 +175,307 @@ const MainDashboard = () => {
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   useEffect(() => {
-    
-    Promise.all([
-      api.get('/api/auth/me'),
-      api.get('/api/patients'),
-    ])
-      .then(([u, p]) => { setUser(u.data); setPatients(p.data); })
-      .catch(console.error);
+    api.get('/api/auth/me').then(u => setUser(u.data)).catch(() => {});
+    api.get('/api/patients').then(p => setPatients(p.data)).catch(() => {});
   }, []);
 
   const active    = patients.filter(p => (p.status || 'Active') === 'Active');
-  const completed = patients.length - active.length;
   const critical  = active.filter(p => p.alert_counts?.red > 0).length;
+  const alerts    = active.filter(p => (p.alert_counts?.amber || 0) > 0).length;
+  const completed = patients.length - active.length;
 
   return (
-    <div style={{
-      display: 'flex', height: '100vh',
-      background: 'radial-gradient(ellipse at top left, #0d1929 0%, #0B1220 55%, #060D18 100%)',
-    }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
 
-      <main style={{ flex: 1, overflowY: 'auto', padding: '40px' }}>
-        <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+      <main style={{
+        flex: 1, overflowY: 'auto',
+        background: '#F5F7FA',
+      }}>
 
-          {/* ── Hero header ─────────────────────────────────────── */}
-          <div className="animate-fade-in" style={{ marginBottom: '40px' }}>
-            {/* AI status pill */}
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '6px 14px', borderRadius: '99px', marginBottom: '18px',
-              background: 'rgba(34,211,238,0.07)', border: '1px solid rgba(34,211,238,0.18)',
-            }}>
-              <span style={{
-                width: '7px', height: '7px', borderRadius: '50%', background: '#22D3EE',
-                boxShadow: '0 0 10px rgba(34,211,238,0.9)',
-                animation: 'ai-pulse-anim 1.8s ease-in-out infinite',
-              }} />
-              <Zap style={{ width: '11px', height: '11px', color: '#22D3EE' }} />
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#22D3EE', textTransform: 'uppercase', letterSpacing: '0.09em' }}>
-                ColpAI Engine Active
-              </span>
-            </div>
-
-            <h1 style={{
-              fontFamily: 'Poppins, sans-serif', fontSize: '34px', fontWeight: 700,
-              color: '#F9FAFB', margin: '0 0 8px', letterSpacing: '-0.02em', lineHeight: 1.15,
-            }}>
-              {greeting},<br />
-              <span style={{ color: '#22D3EE' }}>{user?.name ?? 'Doctor'}</span>
-            </h1>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6B7280', fontSize: '14px' }}>
-              <Calendar style={{ width: '14px', height: '14px' }} />
-              <span>
-                {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                &nbsp;·&nbsp; WHO-compliant digital partogram
-              </span>
-            </div>
-          </div>
-
-          {/* ── KPI Row ─────────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-            <KpiCard value={patients.length} label="Total Patients"      icon={Users}        accent="#22D3EE" delay={0.05} />
-            <KpiCard value={active.length}   label="Active Labor Cases"  icon={Activity}     accent="#34D399" delay={0.10} />
-            <KpiCard value={completed}       label="Completed"           icon={TrendingUp}   accent="#94A3B8" delay={0.15} />
-            <KpiCard value={critical}        label="Critical Alerts"     icon={AlertCircle}  accent="#F87171" delay={0.20} />
-          </div>
-
-          {/* ── Clinician Profile Card ───────────────────────────── */}
-          <div
-            className="animate-fade-in"
-            style={{
-              animationDelay: '0.25s',
-              background: 'rgba(15,21,37,0.85)',
-              border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: '20px', padding: '28px',
-              marginBottom: '24px', position: 'relative', overflow: 'hidden',
-            }}
-          >
-            {/* Top-right ambient glow */}
-            <div style={{
-              position: 'absolute', top: '-60px', right: '-60px', width: '250px', height: '250px',
-              borderRadius: '50%', pointerEvents: 'none',
-              background: 'radial-gradient(circle, rgba(34,211,238,0.05) 0%, transparent 65%)',
-            }} />
-
-            {/* Section header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '9px',
-                background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.15)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Cpu style={{ width: '15px', height: '15px', color: '#22D3EE' }} />
-              </div>
-              <h2 style={{
-                fontFamily: 'Poppins, sans-serif', fontSize: '15px', fontWeight: 600,
-                color: '#D1D5DB', margin: 0,
-              }}>
-                Clinician Details
-              </h2>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '24px' }}>
-              <InfoCell label="Name"              value={user?.name           ?? '—'} />
-              <InfoCell label="License"           value={user?.license_number ?? '—'} />
-              <InfoCell label="Email"             value={user?.email          ?? '—'} />
-              <InfoCell label="Hospital / Clinic" value={user?.hospital       ?? 'TanPrish Dynamics Medical Center'} />
-            </div>
-          </div>
-
-          {/* ── Quick stats ribbon ──────────────────────────────── */}
-          <div style={{
-            display: 'flex', gap: '12px', flexWrap: 'wrap',
-            padding: '16px 20px',
-            background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.1)',
-            borderRadius: '14px', marginBottom: '28px',
-            alignItems: 'center',
-          }} className="animate-fade-in">
-            <ShieldCheck style={{ width: '16px', height: '16px', color: '#34D399' }} />
-            <span style={{ fontSize: '13px', color: '#6B7280' }}>
-              System status: <span style={{ color: '#34D399', fontWeight: 600 }}>All systems operational</span>
-              &nbsp;·&nbsp; Auto-refreshes every 30s
-              &nbsp;·&nbsp; <span style={{ color: '#22D3EE', fontWeight: 600 }}>WHO 2020</span> protocols active
+        {/* ── Sticky topbar ─────────────────────────────────────── */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 40,
+          background: '#FFFFFF',
+          borderBottom: '1px solid #E5E7EB',
+          padding: '14px 36px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Clinical Overview
             </span>
           </div>
 
-          {/* ── CTA ─────────────────────────────────────────────── */}
-          <button
-            onClick={() => navigate('/patients')}
-            className="animate-fade-in"
-            style={{
-              animationDelay: '0.3s',
-              display: 'inline-flex', alignItems: 'center', gap: '10px',
-              padding: '14px 28px',
-              background: 'linear-gradient(135deg, #22D3EE 0%, #0EA5E9 100%)',
-              color: '#030D18', fontWeight: 700, fontSize: '15px',
-              fontFamily: 'Poppins, sans-serif',
-              borderRadius: '13px', border: 'none', cursor: 'pointer',
-              boxShadow: '0 6px 28px rgba(34,211,238,0.38)',
-              transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
-            }}
-            onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(34,211,238,0.5)'; }}
-            onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0) scale(1)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(34,211,238,0.38)'; }}
-          >
-            View Patient List
-            <ArrowRight style={{ width: '18px', height: '18px' }} />
-          </button>
+          {/* AI status pill */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '6px 12px', borderRadius: '6px',
+            background: '#EFF6FF', border: '1px solid #BFDBFE',
+          }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB', animation: 'pulse-soft 2s infinite' }} />
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#2563EB', letterSpacing: '0.04em' }}>
+              ColpAI Active
+            </span>
+          </div>
+        </div>
 
-          {/* ═══════════════════════════════════════════════════════════
-              CLINICAL STANDARDS & DATA SOURCES
-          ═══════════════════════════════════════════════════════════ */}
-          <div className="animate-fade-in" style={{ marginTop: '48px', animationDelay: '0.35s' }}>
+        <div style={{ padding: '32px 36px 64px', maxWidth: '1100px', margin: '0 auto' }}>
 
-            {/* Section header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-              <div style={{
-                width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
-                background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <BookOpen style={{ width: '17px', height: '17px', color: '#818CF8' }} />
-              </div>
-              <div>
-                <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: '18px', fontWeight: 700, color: '#F1F5F9', margin: 0, letterSpacing: '-0.01em' }}>
-                  Clinical Standards &amp; Data Sources
-                </h2>
-                <p style={{ fontSize: '12px', color: '#6B7280', marginTop: '3px' }}>
-                  Evidence-based protocols powering every clinical decision in this system
-                </p>
-              </div>
-            </div>
-
-            {/* Guidelines grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-
-              {/* WHO 2020 */}
-              <GuidelineCard
-                accent="#22D3EE"
-                tag="Primary Standard"
-                tagColor="#22D3EE"
-                org="World Health Organization"
-                title="WHO Labour Care Guide 2020"
-                description="Replaces the traditional partograph. Defines alert and action lines, normal labor progress benchmarks, and intervention thresholds for intrapartum care."
-                points={[
-                  'Active phase: cervical dilation ≥ 4 cm',
-                  'Alert line: 1 cm/hr dilation rate',
-                  'Action line: 4 hrs right of alert line',
-                  'Intrapartum fetal monitoring standards',
-                ]}
-                icon={Globe}
-                link="https://www.who.int/publications/i/item/9789240017566"
-              />
-
-              {/* FIGO */}
-              <GuidelineCard
-                accent="#34D399"
-                tag="Supporting Standard"
-                tagColor="#34D399"
-                org="Int'l Federation of Gynecology & Obstetrics"
-                title="FIGO Intrapartum Care Guidelines"
-                description="FIGO recommendations on safe labor monitoring, obstetric emergencies, and fetal wellbeing assessment during active labor."
-                points={[
-                  'Fetal Heart Rate (FHR) normal: 110–160 bpm',
-                  'Maternal BP thresholds: systolic ≥ 140 / diastolic ≥ 90',
-                  'Contraction adequacy: ≥ 3 in 10 min, ≥ 40 sec',
-                  'Head station: -5 to +5 scale',
-                ]}
-                icon={CheckCircle2}
-                link="https://www.figo.org/resources/figo-statements/intrapartum-fetal-monitoring"
-              />
-
-              {/* AI Engine */}
-              <GuidelineCard
-                accent="#A78BFA"
-                tag="AI Clinical Engine"
-                tagColor="#A78BFA"
-                org="ColpAI — e-Partogram System"
-                title="ColpAI Delivery Prediction Engine"
-                description="Machine-learning assisted labor progression analysis built on WHO-compliant clinical logic, providing real-time delivery time estimation with confidence scoring."
-                points={[
-                  'Linear regression on active-phase dilation data',
-                  'WHO adjustment layers: contraction, descent, speed',
-                  'Confidence scoring: High / Medium / Low',
-                  'Non-blocking safety override for critical states',
-                ]}
-                icon={FlaskConical}
-              />
-
-            </div>
-
-            {/* Compliance footer ribbon */}
-            <div style={{
-              display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center',
-              padding: '14px 20px', borderRadius: '13px',
-              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+          {/* ── Hero header ─────────────────────────────────────── */}
+          <div style={{ marginBottom: '28px' }}>
+            <p style={{ fontSize: '12px', fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>
+              {greeting},
+            </p>
+            <h1 style={{
+              fontFamily: 'Inter, system-ui, sans-serif',
+              fontSize: '24px', fontWeight: 700,
+              color: '#111827', letterSpacing: '-0.01em', lineHeight: 1.2,
+              marginBottom: '6px',
             }}>
-              <ShieldCheck style={{ width: '15px', height: '15px', color: '#34D399', flexShrink: 0 }} />
-              <span style={{ fontSize: '12px', color: '#6B7280', flex: 1 }}>
-                This system is designed for <strong style={{ color: '#94A3B8' }}>clinical decision support only</strong> and does not replace professional medical judgment.
-                All algorithms follow&nbsp;
-                <span style={{ color: '#22D3EE', fontWeight: 600 }}>WHO 2020</span>,&nbsp;
-                <span style={{ color: '#34D399', fontWeight: 600 }}>FIGO</span>, and&nbsp;
-                <span style={{ color: '#A78BFA', fontWeight: 600 }}>ColpAI</span> evidence-based protocols.
-              </span>
+              {user?.name?.trim() || 'Clinician'}{' '}
+              <span style={{ color: '#2563EB' }}>Dashboard</span>
+            </h1>
+            <p style={{ fontSize: '13px', color: '#9CA3AF', lineHeight: 1.5 }}>
+              WHO 2020 partograph monitoring · {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+
+          {/* ── KPI Cards ─────────────────────────────────────── */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
+            <KpiCard value={active.length}    label="Active Patients"   sub="Currently in labor"     iconColor="#2563EB" iconBg="#EFF6FF" borderColor="#BFDBFE" icon={Users}         delay={0}   />
+            <KpiCard value={critical}         label="Critical Alerts"   sub="Require intervention"   iconColor="#DC2626" iconBg="#FEF2F2" borderColor="#FECACA" icon={AlertCircle}   delay={60}  />
+            <KpiCard value={alerts}           label="Under Observation" sub="Alert-line monitoring"  iconColor="#F59E0B" iconBg="#FFFBEB" borderColor="#FDE68A" icon={Activity}      delay={120} />
+            <KpiCard value={completed}        label="Deliveries Today"  sub="Successfully completed" iconColor="#16A34A" iconBg="#F0FDF4" borderColor="#BBF7D0" icon={CheckCircle2} delay={180} />
+          </div>
+
+          {/* ── Main content grid ─────────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '16px', alignItems: 'start' }}>
+
+            {/* Active patients panel */}
+            <div style={{
+              background: '#FFFFFF',
+              border: '1px solid #E5E7EB',
+              borderRadius: '8px', overflow: 'hidden',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+            }}>
+              {/* Panel header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '16px 18px',
+                borderBottom: '1px solid #F3F4F6',
+                background: '#FAFAFA',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB' }} />
+                  <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '12.5px', fontWeight: 700, color: '#111827', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Active Patients
+                  </span>
+                  <span style={{
+                    padding: '1px 7px', borderRadius: '4px', fontSize: '11px', fontWeight: 700,
+                    background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE',
+                  }}>
+                    {active.length}
+                  </span>
+                </div>
+                <button
+                  onClick={() => navigate('/patients')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px',
+                    borderRadius: '5px', fontSize: '11.5px', fontWeight: 600, cursor: 'pointer',
+                    background: '#EFF6FF', border: '1px solid #BFDBFE',
+                    color: '#2563EB',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  View all <ArrowRight style={{ width: '12px', height: '12px' }} />
+                </button>
+              </div>
+
+              {/* Patient list */}
+              <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '400px', overflowY: 'auto' }}>
+                {active.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                    <Users style={{ width: '32px', height: '32px', color: '#D1D5DB', margin: '0 auto 10px' }} />
+                    <p style={{ fontSize: '13px', color: '#9CA3AF' }}>No active patients</p>
+                    <button
+                      onClick={() => navigate('/new-patient')}
+                      style={{ marginTop: '12px', padding: '7px 16px', borderRadius: '6px', background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#2563EB', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Admit new patient →
+                    </button>
+                  </div>
+                ) : (
+                  active.slice(0, 8).map((p, i) => (
+                    <PatientRow key={p.patient_id} patient={p} index={i} onOpen={(id) => navigate(`/dashboard/${id}`)} />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Right column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+              {/* Quick actions */}
+              <div style={{
+                background: '#FFFFFF',
+                border: '1px solid #E5E7EB', borderRadius: '8px',
+                padding: '18px',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+              }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+                  Quick Actions
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {[
+                    { label: 'Admit New Patient', icon: Users,       path: '/new-patient', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+                    { label: 'View All Patients', icon: Activity,    path: '/patients',    color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' },
+                    { label: 'Generate Report',   icon: TrendingUp,  path: '/reports',     color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A' },
+                  ].map(({ label, icon: Icon, path, color, bg, border }) => (
+                    <button
+                      key={label}
+                      onClick={() => navigate(path)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '9px',
+                        padding: '9px 12px', borderRadius: '6px', cursor: 'pointer',
+                        background: bg, border: `1px solid ${border}`,
+                        color, fontSize: '12.5px', fontWeight: 600,
+                        transition: 'opacity 0.15s ease',
+                        width: '100%', textAlign: 'left',
+                      }}
+                    >
+                      <Icon style={{ width: '14px', height: '14px', flexShrink: 0 }} />
+                      {label}
+                      <ArrowRight style={{ width: '12px', height: '12px', marginLeft: 'auto' }} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* System status */}
+              <div style={{
+                background: '#FFFFFF',
+                border: '1px solid #E5E7EB', borderRadius: '8px',
+                padding: '18px',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+              }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+                  System Status
+                </p>
+                {[
+                  { label: 'Server Uptime',  value: '99%',   color: '#16A34A', bg: '#F0FDF4' },
+                  { label: 'AI Accuracy',    value: '98%',   color: '#2563EB', bg: '#EFF6FF' },
+                  { label: 'Response Time',  value: '1.8s',  color: '#F59E0B', bg: '#FFFBEB' },
+                ].map(({ label, value, color, bg }) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#6B7280' }}>{label}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color, background: bg, padding: '2px 8px', borderRadius: '4px', fontFamily: 'DM Mono, monospace' }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Clinician card */}
+              {user && (
+                <div style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E5E7EB', borderRadius: '8px',
+                  padding: '16px',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '40px', height: '40px', borderRadius: '8px', flexShrink: 0,
+                      background: '#EFF6FF', border: '1px solid #BFDBFE',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '16px', fontWeight: 700, color: '#2563EB' }}>
+                        {user.name?.charAt(0)?.toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '13.5px', fontWeight: 700, color: '#111827', margin: 0 }}>{user.name}</p>
+                      {user.license_number && (
+                        <p style={{ fontSize: '10px', color: '#9CA3AF', fontFamily: 'DM Mono, monospace', marginTop: '2px', letterSpacing: '0.06em' }}>
+                          {user.license_number}
+                        </p>
+                      )}
+                      <p style={{ fontSize: '11.5px', color: '#2563EB', marginTop: '2px', fontWeight: 600 }}>
+                        {user.specialization || 'Obstetrician'}
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '12px' }}>
+                    {[
+                      { label: 'Patients', value: patients.length },
+                      { label: 'Active',   value: active.length },
+                      { label: 'Limit',    value: user.patient_limit || '∞' },
+                    ].map(({ label, value }) => (
+                      <div key={label} style={{ flex: 1, textAlign: 'center', padding: '7px 4px', borderRadius: '6px', background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                        <p style={{ fontSize: '15px', fontWeight: 700, color: '#111827', fontFamily: 'DM Mono, monospace', lineHeight: 1 }}>{value}</p>
+                        <p style={{ fontSize: '9.5px', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.07em', marginTop: '3px', fontWeight: 600 }}>{label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* ── Clinical Guidelines ─────────────────────────── */}
+          <div style={{ marginTop: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <div style={{ flex: 1, height: '1px', background: '#E5E7EB' }} />
+              <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.12em', whiteSpace: 'nowrap' }}>
+                Clinical Guidelines
+              </span>
+              <div style={{ flex: 1, height: '1px', background: '#E5E7EB' }} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              {GUIDELINES.map(({ tag, org, title, desc, color, icon: Icon, link, points }) => (
+                <div
+                  key={tag}
+                  style={{
+                    padding: '18px', borderRadius: '8px',
+                    background: '#FFFFFF',
+                    border: `1px solid #E5E7EB`,
+                    borderTop: `3px solid ${color}`,
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                    transition: 'box-shadow 0.15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '30px', height: '30px', borderRadius: '6px', background: `${color}12`, border: `1px solid ${color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon style={{ width: '14px', height: '14px', color }} />
+                      </div>
+                      <span style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${color}12`, color, border: `1px solid ${color}22` }}>
+                        {tag}
+                      </span>
+                    </div>
+                    {link && (
+                      <a href={link} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: '#9CA3AF', textDecoration: 'none' }}>
+                        <ExternalLink style={{ width: '11px', height: '11px' }} />
+                      </a>
+                    )}
+                  </div>
+                  <p style={{ fontSize: '10px', fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{org}</p>
+                  <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#111827', marginBottom: '6px', lineHeight: 1.35, letterSpacing: '-0.01em' }}>{title}</h3>
+                  <p style={{ fontSize: '11.5px', color: '#9CA3AF', lineHeight: 1.55, marginBottom: '10px' }}>{desc}</p>
+                  <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '9px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    {points.map((pt, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '7px' }}>
+                        <div style={{ width: '4px', height: '4px', borderRadius: '50%', marginTop: '5px', background: color, flexShrink: 0 }} />
+                        <span style={{ fontSize: '11.5px', color: '#6B7280', lineHeight: 1.4 }}>{pt}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
       </main>
     </div>

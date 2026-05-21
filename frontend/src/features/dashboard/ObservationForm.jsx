@@ -100,7 +100,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#0A0F1E]/80 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={onClose}></div>
       
       {showVoice && (
         <VoiceAssistant
@@ -109,11 +109,11 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
         />
       )}
 
-      <div className="glass-card w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col relative animate-in fade-in zoom-in duration-300">
-        <div className="p-6 border-b border-white/10 flex items-center justify-between gradient-teal/10">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col relative animate-in fade-in zoom-in duration-300">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold font-display">{initialData ? 'Edit Observation' : 'New Observation'}</h2>
-            <p className="text-sm text-slate-400">{initialData ? `Updating Entry #${initialData.id}` : `Recording for Patient ID: ${patientId}`}</p>
+            <h2 className="text-2xl font-bold font-display text-slate-800">{initialData ? 'Edit Observation' : 'New Observation'}</h2>
+            <p className="text-sm text-slate-500">{initialData ? `Updating Entry #${initialData.id}` : `Recording for Patient ID: ${patientId}`}</p>
           </div>
           <div className="flex items-center space-x-2">
             {/* Admission time info badge + manual override toggle */}
@@ -141,8 +141,8 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
               title="Raw Text Input"
               className={`flex items-center space-x-2 px-4 py-2 border rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
                 showRawText
-                  ? 'bg-purple-500/30 border-purple-500/50 text-purple-300'
-                  : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
+                  ? 'bg-purple-100 border-purple-300 text-purple-700'
+                  : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50'
               }`}
             >
               <FileText className="w-4 h-4" />
@@ -153,12 +153,12 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
               onClick={() => setShowVoice(true)}
               type="button"
               title="Voice Input"
-              className="flex items-center space-x-2 px-4 py-2 bg-[#00C9A7]/20 border border-[#00C9A7]/40 text-[#00C9A7] rounded-xl text-sm font-semibold hover:bg-[#00C9A7]/30 transition-colors cursor-pointer"
+              className="flex items-center space-x-2 px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-xl text-sm font-semibold hover:bg-indigo-100 transition-colors cursor-pointer"
             >
               <Mic className="w-4 h-4" />
               <span>Voice</span>
             </button>
-            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors cursor-pointer text-slate-400">
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer text-slate-500">
               <X className="w-6 h-6" />
             </button>
           </div>
@@ -168,7 +168,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
 
           {/* ── Manual Time Override Panel ───────────────────────── */}
           {showManualTime && (
-            <div className="px-8 py-4 border-b border-white/10 bg-[#FF7F50]/5 flex items-center gap-4">
+            <div className="px-8 py-4 border-b border-slate-200 bg-orange-50 flex items-center gap-4">
               <Clock className="w-4 h-4 text-[#FF7F50] shrink-0" />
               <span className="text-[#FF7F50] text-sm font-semibold whitespace-nowrap">Hours from Admission</span>
               <input
@@ -179,9 +179,9 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                 value={manualTimeInput}
                 onChange={e => setManualTimeInput(e.target.value)}
                 placeholder="e.g. 4.5"
-                className="w-32 bg-white/5 border border-[#FF7F50]/40 rounded-xl px-3 py-2 text-sm text-white focus:border-[#FF7F50] outline-none transition-colors"
+                className="w-32 bg-white border border-orange-300 rounded-xl px-3 py-2 text-sm text-slate-800 focus:border-orange-400 outline-none transition-colors"
               />
-              <span className="text-slate-400 text-xs">hrs since admit</span>
+              <span className="text-slate-500 text-xs">hrs since admit</span>
               <button
                 type="button"
                 onClick={() => {
@@ -191,14 +191,14 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                   }
                   setShowManualTime(false);
                 }}
-                className="px-4 py-2 bg-[#FF7F50]/30 border border-[#FF7F50]/50 text-white rounded-xl text-sm font-semibold hover:bg-[#FF7F50]/50 transition-colors cursor-pointer"
+                className="px-4 py-2 bg-orange-100 border border-orange-300 text-orange-700 rounded-xl text-sm font-semibold hover:bg-orange-200 transition-colors cursor-pointer"
               >
                 Apply
               </button>
               <button
                 type="button"
                 onClick={() => setShowManualTime(false)}
-                className="text-slate-500 hover:text-slate-300 text-xs cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
               >
                 Cancel
               </button>
@@ -207,10 +207,10 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
 
           {/* ── Raw Text Panel ───────────────────────────────────── */}
           {showRawText && (
-            <div className="px-8 pt-6 pb-2 border-b border-white/10 bg-purple-500/5">
+            <div className="px-8 pt-6 pb-2 border-b border-slate-200 bg-purple-50">
               <div className="flex items-center space-x-2 mb-3">
                 <Sparkles className="w-4 h-4 text-purple-400" />
-                <span className="text-purple-300 font-semibold text-sm">Raw Text Entry</span>
+                <span className="text-purple-700 font-semibold text-sm">Raw Text Entry</span>
                 <span className="text-slate-500 text-xs ml-1">— Type naturally, AI fills the form</span>
               </div>
               <textarea
@@ -218,7 +218,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                 onChange={e => { setRawText(e.target.value); setRawResult(null); setRawError(''); }}
                 rows={3}
                 placeholder={'e.g. "Time 4 hours, dilation 5.5 cm, contractions 3 in 10 minutes lasting 40 seconds, head station minus 2, FHR 142 bpm, maternal pulse 86"'}
-                className="w-full bg-white/5 border border-purple-500/30 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-purple-400 outline-none resize-none transition-all"
+                className="w-full bg-white border border-purple-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-purple-400 outline-none resize-none transition-all"
               />
               <div className="flex items-center justify-between mt-3">
                 <div className="text-xs">
@@ -233,7 +233,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                   type="button"
                   onClick={handleParseRawText}
                   disabled={!rawText.trim() || rawParsing}
-                  className="flex items-center space-x-2 px-5 py-2 bg-purple-500/30 border border-purple-500/50 text-purple-200 rounded-xl text-sm font-semibold hover:bg-purple-500/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  className="flex items-center space-x-2 px-5 py-2 bg-purple-100 border border-purple-300 text-purple-700 rounded-xl text-sm font-semibold hover:bg-purple-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
                 >
                   {rawParsing
                     ? <><Loader2 className="w-4 h-4 animate-spin" /><span>Parsing...</span></>
@@ -249,7 +249,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
             
             {/* Labor Progress */}
             <div className="space-y-4">
-              <h3 className="text-[#00C9A7] font-bold text-xs uppercase tracking-widest flex items-center space-x-2">
+              <h3 className="text-indigo-600 font-bold text-xs uppercase tracking-widest flex items-center space-x-2">
                 <Activity className="w-4 h-4" />
                 <span>Labor Progress</span>
               </h3>
@@ -258,7 +258,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                   <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Cervical Dilation (0-10 cm)</label>
                   <input 
                     type="number" step="0.5" name="cervical_dilation" value={formData.cervical_dilation} onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                    className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                     placeholder="Example: 5.5" 
                   />
                 </div>
@@ -266,7 +266,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                   <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Fetal Head Station (-5 to +5)</label>
                   <input 
                     type="number" step="1" name="head_station" value={formData.head_station} onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                    className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                     placeholder="Example: -2" 
                   />
                 </div>
@@ -284,7 +284,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                   <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Heart Rate (110-160 BPM)</label>
                   <input 
                     type="number" name="fetal_heart_rate" value={formData.fetal_heart_rate} onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                    className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                     placeholder="Example: 142" 
                   />
                 </div>
@@ -293,7 +293,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                     <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Amniotic Fluid</label>
                     <select 
                       name="amniotic_fluid" value={formData.amniotic_fluid} onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 focus:border-[#00C9A7] outline-none transition-all appearance-none"
+                      className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 focus:border-indigo-400 outline-none transition-all appearance-none"
                     >
                       <option value="clear">Clear (I)</option>
                       <option value="meconium">Meconium (M)</option>
@@ -305,7 +305,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                     <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Moulding</label>
                     <select 
                       name="moulding" value={formData.moulding} onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 focus:border-[#00C9A7] outline-none transition-all appearance-none"
+                      className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 focus:border-indigo-400 outline-none transition-all appearance-none"
                     >
                       <option value="0">0</option>
                       <option value="+">+</option>
@@ -328,7 +328,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                   <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Frequency (0-5 per 10 min)</label>
                   <input 
                     type="number" name="contraction_freq" value={formData.contraction_freq} onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                    className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                     placeholder="Example: 3" 
                   />
                 </div>
@@ -336,7 +336,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                   <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Duration (10-60 Seconds)</label>
                   <input 
                     type="number" name="contraction_duration" value={formData.contraction_duration} onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                    className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                     placeholder="Example: 35" 
                   />
                 </div>
@@ -355,7 +355,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                     <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Pulse (60-120 BPM)</label>
                     <input 
                       type="number" name="maternal_pulse" value={formData.maternal_pulse} onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                      className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                       placeholder="Ex: 82"
                     />
                   </div>
@@ -363,7 +363,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                     <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Temp (36-39 °C)</label>
                     <input 
                       type="number" step="0.1" name="temperature" value={formData.temperature} onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                      className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                       placeholder="Ex: 37.1"
                     />
                   </div>
@@ -373,7 +373,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                     <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">BP (90-140 Sys)</label>
                     <input 
                       type="number" name="bp_systolic" value={formData.bp_systolic} onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                      className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                       placeholder="Ex: 120"
                     />
                   </div>
@@ -381,7 +381,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                     <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">BP (60-90 Dia)</label>
                     <input 
                       type="number" name="bp_diastolic" value={formData.bp_diastolic} onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                      className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                       placeholder="Ex: 80"
                     />
                   </div>
@@ -401,7 +401,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                     <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Protein</label>
                     <select 
                       name="urine_protein" value={formData.urine_protein} onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 focus:border-[#00C9A7] outline-none transition-all appearance-none"
+                      className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 focus:border-indigo-400 outline-none transition-all appearance-none"
                     >
                       <option value="nil">Nil</option>
                       <option value="+">+</option>
@@ -413,7 +413,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                     <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Ketones</label>
                     <select 
                       name="urine_ketones" value={formData.urine_ketones} onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 focus:border-[#00C9A7] outline-none transition-all appearance-none"
+                      className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 focus:border-indigo-400 outline-none transition-all appearance-none"
                     >
                       <option value="nil">Nil</option>
                       <option value="+">+</option>
@@ -425,7 +425,7 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
                   <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Volume (50-1000 mL)</label>
                   <input 
                     type="number" name="urine_volume" value={formData.urine_volume} onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 focus:border-[#00C9A7] outline-none transition-all"
+                    className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:border-indigo-400 outline-none transition-all"
                     placeholder="Example: 250"
                   />
                 </div>
@@ -435,10 +435,10 @@ const ObservationForm = ({ patientId, patient, initialData, onSave, onClose }) =
           </div>
         </form>
 
-        <div className="p-6 border-t border-white/10 flex items-center justify-end space-x-4">
-          <button 
+        <div className="p-6 border-t border-slate-200 flex items-center justify-end space-x-4">
+          <button
             type="button" onClick={onClose}
-            className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="px-6 py-2.5 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
           >
             Cancel
           </button>

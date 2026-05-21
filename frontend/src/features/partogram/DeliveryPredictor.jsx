@@ -27,24 +27,24 @@ const ProgressBar = ({ pct }) => (
     <div style={{
       display: 'flex', justifyContent: 'space-between',
       fontSize: '9px', fontWeight: 700, textTransform: 'uppercase',
-      letterSpacing: '0.1em', color: '#4B5563', marginBottom: '6px',
+      letterSpacing: '0.1em', color: '#64748B', marginBottom: '6px',
     }}>
       <span>4 cm (Active Phase)</span>
       <span>10 cm (Full Dilation)</span>
     </div>
     <div style={{
       position: 'relative', height: '8px', borderRadius: '99px',
-      background: 'rgba(255,255,255,0.05)',
-      border: '1px solid rgba(255,255,255,0.07)',
+      background: 'rgba(238,242,255,0.7)',
+      border: '1px solid rgba(99,102,241,0.1)',
       overflow: 'hidden',
     }}>
       {/* Track fill */}
       <div style={{
         position: 'absolute', left: 0, top: 0, bottom: 0,
         width: `${pct}%`,
-        background: 'linear-gradient(90deg, #22D3EE 0%, #14B8A6 100%)',
+        background: 'linear-gradient(90deg, #6366F1 0%, #818CF8 100%)',
         borderRadius: '99px',
-        boxShadow: '0 0 12px rgba(34,211,238,0.5)',
+        boxShadow: '0 0 12px rgba(99,102,241,0.4)',
         transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
       }} />
       {/* Tick marks at 1/6 intervals (4→5→6→7→8→9→10) */}
@@ -52,7 +52,7 @@ const ProgressBar = ({ pct }) => (
         <div key={i} style={{
           position: 'absolute', top: 0, bottom: 0,
           left: `${(i / 6) * 100}%`,
-          width: '1px', background: 'rgba(255,255,255,0.08)',
+          width: '1px', background: 'rgba(99,102,241,0.15)',
         }} />
       ))}
     </div>
@@ -85,12 +85,39 @@ const ConfidenceBadge = ({ level }) => {
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
-const DeliveryPredictor = ({ patient, observations }) => {
+const DeliveryPredictor = ({ patient, observations, theme = 'light' }) => {
   const prevPredRef = useRef(null);
+
+  const t = theme === 'dark' ? {
+    bg: 'rgba(15,23,42,0.6)', border: '1px solid rgba(79,209,197,0.2)',
+    textPri: '#F1F5F9', textSec: '#94A3B8', textMuted: '#4B5563',
+    cardBg: 'rgba(255,255,255,0.03)', cardBorder: '1px solid rgba(255,255,255,0.06)'
+  } : {
+    bg: 'rgba(255,255,255,0.7)', border: '1px solid rgba(74,144,226,0.3)',
+    textPri: '#1E293B', textSec: '#64748B', textMuted: '#94A3B8',
+    cardBg: 'rgba(255,255,255,0.5)', cardBorder: '1px solid rgba(74,144,226,0.15)'
+  };
 
   const { pred, parsedCount } = useMemo(() => {
     if (!patient || !observations || observations.length === 0) {
-      return { pred: null, parsedCount: 0 };
+      return {
+        pred: {
+          available: false,
+          unavailableReason: !patient 
+            ? 'Patient data not loaded.' 
+            : 'No observations recorded yet. Add data using the input panel to enable prediction.',
+          expected_time_remaining_hours: null,
+          estimated_delivery_window: null,
+          confidence: null,
+          dilation_rate_cmhr: null,
+          current_dilation_cm: null,
+          progress_pct: 0,
+          clinical_flags: [],
+          explanation: !patient ? 'Waiting for patient data.' : 'Waiting for initial patient data.',
+          urgentWarning: false,
+        },
+        parsedCount: 0
+      };
     }
 
     const admissionTime = new Date(patient.admission_time);
@@ -118,7 +145,7 @@ const DeliveryPredictor = ({ patient, observations }) => {
     const prev = prevPredRef.current;
     if (prev !== null && prev !== pred.expected_time_remaining_hours) {
       cardRef.current.animate(
-        [{ boxShadow: '0 0 0 3px rgba(34,211,238,0.4)' }, { boxShadow: '0 0 0 0px rgba(34,211,238,0)' }],
+        [{ boxShadow: '0 0 0 3px rgba(99,102,241,0.4)' }, { boxShadow: '0 0 0 0px rgba(99,102,241,0)' }],
         { duration: 900, easing: 'ease-out' }
       );
     }
@@ -130,14 +157,19 @@ const DeliveryPredictor = ({ patient, observations }) => {
   return (
     <div
       ref={cardRef}
-      className="glass-card animate-fade-in"
-      style={{ borderRadius: '18px', overflow: 'hidden', position: 'relative' }}
+      className="animate-fade-in"
+      style={{
+        borderRadius: '18px', overflow: 'hidden', position: 'relative',
+        background: t.bg,
+        border: t.border,
+        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+      }}
     >
       {/* Top accent bar */}
       <div style={{
         height: '3px',
         background: pred.available
-          ? 'linear-gradient(90deg, #22D3EE 0%, #14B8A6 60%, transparent 100%)'
+          ? 'linear-gradient(90deg, #6366F1 0%, #818CF8 60%, transparent 100%)'
           : 'linear-gradient(90deg, #475569 0%, transparent 100%)',
       }} />
 
@@ -146,7 +178,7 @@ const DeliveryPredictor = ({ patient, observations }) => {
         position: 'absolute', top: '-20px', right: '-20px',
         width: '220px', height: '220px', borderRadius: '50%', pointerEvents: 'none',
         background: pred.available
-          ? 'radial-gradient(circle, rgba(34,211,238,0.06) 0%, transparent 65%)'
+          ? 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 65%)'
           : 'none',
       }} />
 
@@ -155,19 +187,19 @@ const DeliveryPredictor = ({ patient, observations }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
-            background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.15)',
+            background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Brain style={{ width: '18px', height: '18px', color: '#22D3EE' }} />
+            <Brain style={{ width: '18px', height: '18px', color: '#6366F1' }} />
           </div>
           <div>
             <h3 style={{
               fontFamily: 'Roboto, system-ui, sans-serif', fontSize: '15px', fontWeight: 700,
-              color: '#F1F5F9', margin: 0, lineHeight: 1,
+              color: t.textPri, margin: 0, lineHeight: 1,
             }}>
               Delivery Prediction
             </h3>
-            <p style={{ fontSize: '10px', color: '#4B5563', margin: '3px 0 0', letterSpacing: '0.06em' }}>
+            <p style={{ fontSize: '10px', color: t.textMuted, margin: '3px 0 0', letterSpacing: '0.06em' }}>
               ColpAI · Data-driven · WHO 2020 Adjusted
             </p>
           </div>
@@ -177,14 +209,14 @@ const DeliveryPredictor = ({ patient, observations }) => {
         <div style={{
           display: 'flex', alignItems: 'center', gap: '6px',
           padding: '5px 10px', borderRadius: '99px',
-          background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.1)',
+          background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.1)',
         }}>
           <span style={{
             width: '6px', height: '6px', borderRadius: '50%',
-            background: '#22D3EE', boxShadow: '0 0 8px rgba(34,211,238,0.7)',
+            background: '#6366F1', boxShadow: '0 0 8px rgba(99,102,241,0.7)',
             animation: 'ai-pulse-anim 1.8s ease-in-out infinite',
           }} />
-          <span style={{ fontSize: '9px', fontWeight: 700, color: '#22D3EE', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: '#6366F1', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
             Live
           </span>
         </div>
@@ -212,30 +244,30 @@ const DeliveryPredictor = ({ patient, observations }) => {
             {/* Big time display */}
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', marginBottom: '6px' }}>
               <div>
-                <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#4B5563', marginBottom: '4px' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.textMuted, marginBottom: '4px' }}>
                   Expected Time to Full Dilation
                 </div>
                 <div style={{
                   fontFamily: 'Roboto Mono, monospace', fontSize: '34px', fontWeight: 500,
-                  color: '#F1F5F9', lineHeight: 1, letterSpacing: '-0.02em',
+                  color: t.textPri, lineHeight: 1, letterSpacing: '-0.02em',
                 }}>
                   {pred.estimated_delivery_window}
                 </div>
-                <div style={{ fontSize: '11px', color: '#6B7280', marginTop: '5px' }}>
+                <div style={{ fontSize: '11px', color: t.textSec, marginTop: '5px' }}>
                   ~{pred.expected_time_remaining_hours}h remaining · currently at{' '}
-                  <span style={{ color: '#22D3EE', fontWeight: 700 }}>{pred.current_dilation_cm} cm</span>
+                  <span style={{ color: '#6366F1', fontWeight: 700 }}>{pred.current_dilation_cm} cm</span>
                 </div>
               </div>
 
               {/* Rate + Confidence column */}
               <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
                 <div style={{
-                  fontSize: '20px', fontWeight: 500, color: '#22D3EE',
+                  fontSize: '20px', fontWeight: 500, color: '#6366F1',
                   fontFamily: 'Roboto Mono, monospace', lineHeight: 1,
                 }}>
                   {pred.dilation_rate_cmhr} cm/hr
                 </div>
-                <div style={{ fontSize: '9px', color: '#4B5563', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '3px' }}>
+                <div style={{ fontSize: '9px', color: t.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '3px' }}>
                   Dilation Rate
                 </div>
                 <div style={{ marginTop: '8px' }}>
@@ -249,10 +281,9 @@ const DeliveryPredictor = ({ patient, observations }) => {
               <ProgressBar pct={pred.progress_pct} />
             </div>
 
-            {/* Clinical adjustment flags */}
             {pred.clinical_flags.length > 0 && (
               <div style={{ marginBottom: '14px' }}>
-                <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#4B5563', marginBottom: '7px' }}>
+                <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.textMuted, marginBottom: '7px' }}>
                   Clinical Adjustments Applied
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -287,13 +318,13 @@ const DeliveryPredictor = ({ patient, observations }) => {
             {/* Explanation */}
             <div style={{
               padding: '11px 14px', borderRadius: '10px',
-              background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.1)',
+              background: t.cardBg, border: t.cardBorder,
               marginBottom: '14px',
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                <Activity style={{ width: '13px', height: '13px', color: '#22D3EE', marginTop: '1px', flexShrink: 0 }} />
-                <p style={{ fontSize: '11px', color: '#94A3B8', margin: 0, lineHeight: 1.6 }}>
-                  <span style={{ color: '#22D3EE', fontWeight: 700 }}>Model logic: </span>
+                <Activity style={{ width: '13px', height: '13px', color: '#6366F1', marginTop: '1px', flexShrink: 0 }} />
+                <p style={{ fontSize: '11px', color: t.textSec, margin: 0, lineHeight: 1.6 }}>
+                  <span style={{ color: '#6366F1', fontWeight: 700 }}>Model logic: </span>
                   {pred.explanation}
                 </p>
               </div>
@@ -307,23 +338,23 @@ const DeliveryPredictor = ({ patient, observations }) => {
           }}>
             <div style={{
               width: '52px', height: '52px', borderRadius: '14px',
-              background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.15)',
+              background: t.cardBg, border: t.cardBorder,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <Ban style={{ width: '24px', height: '24px', color: '#4B5563' }} />
+              <Ban style={{ width: '24px', height: '24px', color: t.textMuted }} />
             </div>
             <div>
-              <p style={{ fontSize: '13px', fontWeight: 700, color: '#94A3B8', margin: '0 0 6px' }}>
+              <p style={{ fontSize: '13px', fontWeight: 700, color: t.textSec, margin: '0 0 6px' }}>
                 Prediction Unavailable
               </p>
-              <p style={{ fontSize: '12px', color: '#4B5563', margin: 0, maxWidth: '360px', lineHeight: 1.6 }}>
+              <p style={{ fontSize: '12px', color: t.textMuted, margin: 0, maxWidth: '360px', lineHeight: 1.6 }}>
                 {pred.unavailableReason}
               </p>
             </div>
             <div style={{
               padding: '8px 14px', borderRadius: '9px',
               background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.12)',
-              fontSize: '11px', color: '#F87171',
+              fontSize: '11px', color: '#EF4444',
             }}>
               <AlertTriangle style={{ width: '11px', height: '11px', display: 'inline', marginRight: '5px' }} />
               {pred.unavailableReason?.includes('active phase')
@@ -338,12 +369,13 @@ const DeliveryPredictor = ({ patient, observations }) => {
         {/* ── Medical disclaimer (always) ───────────────────────────────── */}
         <div style={{
           marginTop: pred.available ? '0' : '4px',
-          paddingTop: '13px', borderTop: '1px solid rgba(255,255,255,0.04)',
+          paddingTop: '13px', borderTop: t.cardBorder,
           display: 'flex', alignItems: 'flex-start', gap: '7px',
+          paddingBottom: '4px',
         }}>
-          <Info style={{ width: '12px', height: '12px', color: '#374151', marginTop: '1px', flexShrink: 0 }} />
-          <p style={{ fontSize: '10px', color: '#374151', margin: 0, lineHeight: 1.6, fontStyle: 'italic' }}>
-            <span style={{ fontStyle: 'normal', fontWeight: 700, color: '#4B5563' }}>AI-Assisted Estimate — </span>
+          <Info style={{ width: '12px', height: '12px', color: t.textMuted, marginTop: '1px', flexShrink: 0 }} />
+          <p style={{ fontSize: '10px', color: t.textSec, margin: 0, lineHeight: 1.6, fontStyle: 'italic' }}>
+            <span style={{ fontStyle: 'normal', fontWeight: 700, color: t.textPri }}>AI-Assisted Estimate — </span>
             This is a clinical decision-support tool. Final decisions must be made by a qualified obstetrician.
             Prediction updates automatically with each new observation.
           </p>

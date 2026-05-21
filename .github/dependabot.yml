@@ -1,0 +1,70 @@
+# Dependabot configuration — automated dependency upgrades.
+#
+# Each ecosystem gets a weekly PR with grouped minor + patch bumps. Major
+# updates are isolated so they can be reviewed and tested independently.
+# Security-only updates run daily on top of the weekly cadence.
+version: 2
+
+updates:
+  # ── Backend (Python) ────────────────────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "backend"]
+    groups:
+      python-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+
+  # ── ML pipeline (Python, separate venv) ─────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/lstm_pipeline"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "ml-pipeline"]
+
+  # ── Clinician frontend ──────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "frontend"]
+    groups:
+      js-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+
+  # ── Admin frontend ──────────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/admin-frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "admin-frontend"]
+    groups:
+      js-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+
+  # ── GitHub Actions ──────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "ci"]
+
+  # ── Docker base images ──────────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "docker"]

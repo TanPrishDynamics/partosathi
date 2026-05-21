@@ -40,10 +40,16 @@ npm run dev
 
 ---
 
-## 🔑 Login Credentials
-Use the pre-seeded admin account to explore the dashboard:
-- **Email**: `admin@hospital.com`
-- **Password**: `admin123`
+## 🔑 First-time setup
+Demo accounts are seeded **only** when:
+- `FLASK_ENV` is NOT `production`, AND
+- `SEED_DEMO_DATA=1` is set in your `.env`.
+
+The seed password is derived from `SEED_ADMIN_PASSWORD` in your `.env` —
+never hardcoded in this repo. See [`.env.example`](./.env.example) for the
+required variables and [`SECURITY.md`](./SECURITY.md) for reporting issues.
+The application refuses to start without a valid `FIELD_ENCRYPTION_KEY`
+in every environment (dev / test / prod).
 
 ## 🏥 Clinical Alerts Implemented
 - **Fetal Distress**: FHR < 110 or > 160 bpm (Red Alert)

@@ -180,21 +180,21 @@ const VoiceAssistant = ({ onDataExtracted, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#0A0F1E]/85 backdrop-blur-md" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="glass-card w-full max-w-lg relative z-10 flex flex-col animate-in fade-in zoom-in duration-300 overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-lg w-full max-w-lg relative z-10 flex flex-col animate-in fade-in zoom-in duration-300 overflow-hidden">
         {/* Header */}
-        <div className="p-5 border-b border-white/10 flex items-center justify-between">
+        <div className="p-5 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#00C9A7] to-blue-500 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center">
               <Mic className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-lg">Voice Input</h3>
-              <p className="text-[11px] text-slate-400">Speak naturally — AI extracts clinical data</p>
+              <h3 className="font-bold text-slate-800 text-lg">Voice Input</h3>
+              <p className="text-[11px] text-slate-500">Speak naturally — AI extracts clinical data</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-slate-400 cursor-pointer">
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-full transition-colors text-slate-500 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -202,8 +202,8 @@ const VoiceAssistant = ({ onDataExtracted, onClose }) => {
         <div className="p-6 flex flex-col space-y-5">
           {/* Example phrase */}
           {status === 'idle' && (
-            <div className="bg-[#0f172a] rounded-xl p-4 border border-white/5 text-xs text-slate-400 leading-relaxed">
-              <p className="text-slate-300 font-semibold mb-2">Example phrase:</p>
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs text-slate-500 leading-relaxed">
+              <p className="text-slate-700 font-semibold mb-2">Example phrase:</p>
               <em>"Dilation five point five cm, contractions three in ten minutes lasting forty seconds, head at minus two station, FHR one forty bpm"</em>
             </div>
           )}
@@ -220,9 +220,9 @@ const VoiceAssistant = ({ onDataExtracted, onClose }) => {
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                 </span>
               </div>
-              <p className="text-white font-semibold">Listening — speak your observation...</p>
+              <p className="text-slate-800 font-semibold">Listening — speak your observation...</p>
               {interimText && (
-                <p className="text-slate-400 text-sm italic text-center max-w-xs">"{interimText}"</p>
+                <p className="text-slate-500 text-sm italic text-center max-w-xs">"{interimText}"</p>
               )}
               <button
                 onClick={stopListening}
@@ -237,8 +237,8 @@ const VoiceAssistant = ({ onDataExtracted, onClose }) => {
           {/* Processing */}
           {status === 'processing' && (
             <div className="flex flex-col items-center space-y-3 py-6">
-              <Loader2 className="w-8 h-8 text-[#00C9A7] animate-spin" />
-              <p className="text-slate-300 text-sm">Extracting clinical data with AI...</p>
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+              <p className="text-slate-600 text-sm">Extracting clinical data with AI...</p>
               {transcript && (
                 <p className="text-slate-500 text-xs italic text-center max-w-xs">"{transcript}"</p>
               )}
@@ -248,17 +248,17 @@ const VoiceAssistant = ({ onDataExtracted, onClose }) => {
           {/* Results */}
           {status === 'done' && extractedData && (
             <div className="space-y-4">
-              <div className="flex items-center space-x-2 text-[#00C9A7]">
+              <div className="flex items-center space-x-2 text-indigo-600">
                 <CheckCircle className="w-5 h-5" />
                 <span className="font-semibold text-sm">Extraction Complete</span>
-                <span className="ml-auto text-xs text-slate-400">Confidence: <span className="text-white font-bold">{Math.round(confidence * 100)}%</span></span>
+                <span className="ml-auto text-xs text-slate-500">Confidence: <span className="text-slate-800 font-bold">{Math.round(confidence * 100)}%</span></span>
               </div>
 
-              <div className="bg-[#0f172a] rounded-xl border border-white/5 divide-y divide-white/5 overflow-hidden">
+              <div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200 overflow-hidden">
                 {Object.entries(extractedData).map(([key, value]) => (
                   <div key={key} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                    <span className="text-slate-400 text-xs">{fieldLabels[key] || key}</span>
-                    <span className="text-white font-semibold font-mono">{String(value)}</span>
+                    <span className="text-slate-500 text-xs">{fieldLabels[key] || key}</span>
+                    <span className="text-slate-800 font-semibold font-mono">{String(value)}</span>
                   </div>
                 ))}
               </div>
@@ -272,10 +272,10 @@ const VoiceAssistant = ({ onDataExtracted, onClose }) => {
               </p>
 
               <div className="flex space-x-3">
-                <button onClick={reset} className="flex-1 py-2.5 text-slate-400 hover:text-white border border-white/10 rounded-xl text-sm transition-colors cursor-pointer">
+                <button onClick={reset} className="flex-1 py-2.5 text-slate-500 hover:text-slate-800 border border-slate-200 rounded-xl text-sm transition-colors cursor-pointer">
                   Try Again
                 </button>
-                <button onClick={handleApply} className="flex-1 py-2.5 bg-gradient-to-r from-[#00C9A7] to-blue-500 text-white rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer">
+                <button onClick={handleApply} className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer">
                   Apply to Form
                 </button>
               </div>
@@ -289,7 +289,7 @@ const VoiceAssistant = ({ onDataExtracted, onClose }) => {
                 <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
                 <p className="text-red-300 text-sm">{error}</p>
               </div>
-              <button onClick={reset} className="w-full py-2.5 text-slate-400 hover:text-white border border-white/10 rounded-xl text-sm transition-colors cursor-pointer">
+              <button onClick={reset} className="w-full py-2.5 text-slate-500 hover:text-slate-800 border border-slate-200 rounded-xl text-sm transition-colors cursor-pointer">
                 Try Again
               </button>
             </div>
@@ -307,7 +307,7 @@ const VoiceAssistant = ({ onDataExtracted, onClose }) => {
               <button
                 onClick={startListening}
                 disabled={!isSupported}
-                className="w-full flex items-center justify-center space-x-3 py-3.5 bg-gradient-to-r from-[#00C9A7] to-blue-500 text-white rounded-xl font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="w-full flex items-center justify-center space-x-3 py-3.5 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-xl font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 <Mic className="w-5 h-5" />
                 <span>Start Voice Input</span>

@@ -23,18 +23,20 @@ ChartJS.register(
 const ContractionChart = ({ patient, observations }) => {
   if (!patient || !observations) return null;
   
-  const admissionTime = new Date(patient.admission_time);
+  const admissionTime = React.useMemo(() => new Date(patient.admission_time), [patient.admission_time]);
   
-  const contraxData = observations
-    .filter(obs => obs.contraction_freq !== null)
-    .map(obs => ({
-      x: differenceInHours(new Date(obs.timestamp), admissionTime),
-      y: obs.contraction_freq,
-      duration: obs.contraction_duration
-    }))
-    .sort((a, b) => a.x - b.x);
+  const contraxData = React.useMemo(() =>
+    observations
+      .filter(obs => obs.contraction_freq !== null)
+      .map(obs => ({
+        x: differenceInHours(new Date(obs.timestamp), admissionTime),
+        y: obs.contraction_freq,
+        duration: obs.contraction_duration
+      }))
+      .sort((a, b) => a.x - b.x),
+  [observations, patient.admission_time]);
 
-  const data = {
+  const data = React.useMemo(() => ({
     labels: contraxData.map(d => d.x),
     datasets: [
       {
@@ -48,9 +50,10 @@ const ContractionChart = ({ patient, observations }) => {
         borderRadius: 4,
       }
     ],
-  };
+  }), [contraxData]);
 
-  const options = {
+  const options = React.useMemo(() => ({
+    animation: false,
     responsive: true,
     maintainAspectRatio: false,
     scales: {
@@ -77,7 +80,7 @@ const ContractionChart = ({ patient, observations }) => {
         }
       }
     }
-  };
+  }), [contraxData]);
 
   return (
     <div className="glass-card p-5 h-[220px] flex flex-col">

@@ -160,20 +160,29 @@ export function computeWHOClassification(parsedObs, timeAt4cm) {
     o => o.cervical_dilation !== null && o.cervical_dilation >= ACTIVE_PHASE_CM
   );
 
-  // ── 1. GRAPH STATUS (dilation curve vs alert/action lines) ────────────────
-  let graphLevel = 0; // 0=normal, 1=borderline, 2=abnormal
+  // ── 1. GRAPH STATUS — ONLY line crossings, never dilation rate ───────────
+  // WHO rule: graph is NORMAL as long as the curve stays LEFT of the alert line.
+  // Slow dilation rate alone does NOT make graph BORDERLINE.
+  let graphLevel = 0; // 0=normal, 1=borderline (alert crossed), 2=abnormal (action crossed)
   let lineStatus = 'normal';
   const graphFlags = [];
 
-  // Dilation rate (overall active phase)
+  // Overall active-phase dilation rate (first → last active point)
   let dilationRate = null;
   if (activeObs.length >= 2) {
     const first = activeObs[0];
     const last  = activeObs[activeObs.length - 1];
     const dt = last.hourOffset - first.hourOffset;
-    if (dt > 0) {
-      dilationRate = (last.cervical_dilation - first.cervical_dilation) / dt;
-    }
+    if (dt > 0) dilationRate = (last.cervical_dilation - first.cervical_dilation) / dt;
+  }
+
+  // Rolling rate: last 2 active points — most recent trend
+  let rollingRate = null;
+  if (activeObs.length >= 2) {
+    const p1 = activeObs[activeObs.length - 2];
+    const p2 = activeObs[activeObs.length - 1];
+    const dt = p2.hourOffset - p1.hourOffset;
+    if (dt > 0) rollingRate = (p2.cervical_dilation - p1.cervical_dilation) / dt;
   }
 
   // Check each active observation against alert/action lines
@@ -182,25 +191,27 @@ export function computeWHOClassification(parsedObs, timeAt4cm) {
     let alertCrossed  = false;
 
     for (const obs of activeObs) {
-      const alertY  = alertLineDilationAt(obs.hourOffset, timeAt4cm);
+      // Clamp to 10 before comparing — never compare beyond full dilation
+      const dil     = Math.min(10, obs.cervical_dilation);
+      const alertY  = alertLineDilationAt(obs.hourOffset, timeAt4cm); // already clamped
       const actionY = actionLineDilationAt(obs.hourOffset, timeAt4cm);
 
-      // Action line check (only applies when action line exists)
-      if (actionY !== null && obs.cervical_dilation < actionY) {
+      // Action line: only fires after 4 h from active start
+      if (actionY !== null && dil < actionY) {
         if (!actionCrossed) {
           graphFlags.push(
-            `Action line crossed — dilation ${obs.cervical_dilation} cm vs expected ${actionY.toFixed(1)} cm at ${obs.hourOffset.toFixed(1)}h`
+            `Action line crossed — dilation ${dil} cm vs expected ${actionY.toFixed(1)} cm at ${obs.hourOffset.toFixed(1)}h`
           );
           actionCrossed = true;
         }
         lineStatus = 'action';
         graphLevel = 2;
       }
-      // Alert line check
-      else if (alertY !== null && obs.cervical_dilation < alertY) {
+      // Alert line: fires immediately from active start
+      else if (alertY !== null && dil < alertY) {
         if (!alertCrossed) {
           graphFlags.push(
-            `Alert line crossed — dilation ${obs.cervical_dilation} cm vs expected ${alertY.toFixed(1)} cm at ${obs.hourOffset.toFixed(1)}h`
+            `Alert line crossed — dilation ${dil} cm vs expected ${alertY.toFixed(1)} cm at ${obs.hourOffset.toFixed(1)}h`
           );
           alertCrossed = true;
         }
@@ -208,12 +219,8 @@ export function computeWHOClassification(parsedObs, timeAt4cm) {
         if (graphLevel < 1) graphLevel = 1;
       }
     }
-
-    // Slow rate is a graph-level observation (not automatic BORDERLINE if left of alert)
-    if (activeObs.length >= 2 && dilationRate !== null && dilationRate < ALERT_SLOPE && lineStatus === 'normal') {
-      graphFlags.push(`Dilation rate ${dilationRate.toFixed(1)} cm/hr — marginally below 1 cm/hr WHO standard`);
-      graphLevel = Math.max(graphLevel, 1);
-    }
+    // ── KEY FIX: slow rate does NOT touch graphLevel ──────────────────────
+    // Slow rate is a clinical flag (see below). Never a graph classification.
   }
 
   const graphStatusMap = ['NORMAL', 'BORDERLINE', 'ABNORMAL'];
@@ -222,17 +229,47 @@ export function computeWHOClassification(parsedObs, timeAt4cm) {
   // ── 2. CLINICAL STATUS (all non-graph parameters) ─────────────────────────
   let clinLevel = 0;
   const clinicalFlags = [];
-
   const bumpClin = (level) => { if (level > clinLevel) clinLevel = level; };
 
-  // FHR
-  for (const obs of parsedObs) {
+  // Slow dilation rate — clinical flag, NOT a graph classification
+  if (activeObs.length >= 2 && dilationRate !== null && dilationRate < ALERT_SLOPE) {
+    const rateStr = rollingRate !== null
+      ? `overall ${dilationRate.toFixed(2)} cm/hr, recent ${rollingRate.toFixed(2)} cm/hr`
+      : `${dilationRate.toFixed(2)} cm/hr`;
+    clinicalFlags.push(`Slow dilation rate — ${rateStr} (WHO standard ≥ 1 cm/hr in active phase). Consider oxytocin augmentation.`);
+    bumpClin(1);
+  }
+
+  // Rapid labour (> 2 cm/hr) — precipitous delivery risk
+  if (dilationRate !== null && dilationRate > 2.0) {
+    clinicalFlags.push(`Rapid labour — ${dilationRate.toFixed(2)} cm/hr (> 2 cm/hr). Risk: uterine rupture / fetal distress.`);
+    bumpClin(1);
+  }
+
+  // FHR — threshold alerts (bradycardia / tachycardia)
+  const fhrObs = parsedObs.filter(o => o.fetal_heart_rate != null);
+  let fhrFlagged = false;
+  for (const obs of fhrObs) {
     const fhr = obs.fetal_heart_rate;
-    if (fhr == null) continue;
     if (fhr < FHR_MIN || fhr > FHR_MAX) {
-      clinicalFlags.push(`Fetal distress — FHR ${fhr} bpm (normal 110–160 bpm)`);
+      const label = fhr < FHR_MIN ? 'Bradycardia' : 'Tachycardia';
+      clinicalFlags.push(`Fetal ${label} — FHR ${fhr} bpm (normal 110–160 bpm). Immediate assessment required.`);
       bumpClin(2);
+      fhrFlagged = true;
       break;
+    }
+  }
+
+  // FHR rising trend: 3 consecutive readings each higher — early warning
+  if (!fhrFlagged && fhrObs.length >= 3) {
+    const r = fhrObs.slice(-3);
+    if (r[0].fetal_heart_rate < r[1].fetal_heart_rate &&
+        r[1].fetal_heart_rate < r[2].fetal_heart_rate) {
+      clinicalFlags.push(
+        `FHR rising trend — ${r[0].fetal_heart_rate} → ${r[1].fetal_heart_rate} → ${r[2].fetal_heart_rate} bpm ` +
+        `(3 consecutive readings rising — early warning of potential distress)`
+      );
+      bumpClin(1);
     }
   }
 
@@ -335,6 +372,7 @@ export function computeWHOClassification(parsedObs, timeAt4cm) {
     graph_flags:    graphFlags,
     dilation_rate,
     dilationRate,
+    rollingRate,
     insight,
     recommendation,
     lineStatus,

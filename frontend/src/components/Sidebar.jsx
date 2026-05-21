@@ -1,19 +1,58 @@
 import React, { useState, useEffect, useContext } from 'react';
 import api from '../services/api';
 import { NavLink, useParams, useNavigate } from 'react-router-dom';
-import { Activity, Users, UserPlus, LogOut, LayoutDashboard, FileText, LogIn, Zap } from 'lucide-react';
+import {
+  Activity, Users, UserPlus, LogOut, LayoutDashboard,
+  FileText, HelpCircle, Bell, TrendingUp, CreditCard,
+  ChevronRight,
+} from 'lucide-react';
 import { AuthContext } from '../App';
 
 const NAV = [
-  { to: null,           label: 'Dashboard',   icon: LayoutDashboard, dynamic: true },
-  { to: '/patients',    label: 'Patients',    icon: Users },
-  { to: '/new-patient', label: 'New Patient', icon: UserPlus },
-  { to: '/reports',     label: 'Reports',     icon: FileText },
+  { to: null,            label: 'Dashboard',    icon: LayoutDashboard, dynamic: true },
+  { to: '/patients',     label: 'Patients',     icon: Users },
+  { to: '/new-patient',  label: 'New Patient',  icon: UserPlus },
+  { to: '/productivity', label: 'Productivity', icon: TrendingUp },
+  { to: '/reports',      label: 'Reports',      icon: FileText },
+  { to: '/help',         label: 'Help Center',  icon: HelpCircle },
 ];
 
+const NavItem = ({ to, label, icon: Icon }) => (
+  <NavLink
+    to={to}
+    style={({ isActive }) => ({
+      display: 'flex', alignItems: 'center', gap: '10px',
+      padding: '9px 12px', borderRadius: '6px',
+      fontSize: '13.5px', fontWeight: isActive ? 600 : 400,
+      fontFamily: 'Inter, system-ui, sans-serif',
+      textDecoration: 'none',
+      transition: 'all 0.15s ease',
+      borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
+      background: isActive ? '#EFF6FF' : 'transparent',
+      color: isActive ? '#2563EB' : '#6B7280',
+      paddingLeft: isActive ? '10px' : '12px',
+    })}
+  >
+    {({ isActive }) => (
+      <>
+        <Icon style={{
+          width: '16px', height: '16px', flexShrink: 0,
+          color: isActive ? '#2563EB' : '#9CA3AF',
+          transition: 'color 0.15s ease',
+        }} />
+        <span>{label}</span>
+        {isActive && (
+          <ChevronRight style={{ width: '13px', height: '13px', marginLeft: 'auto', color: '#93C5FD' }} />
+        )}
+      </>
+    )}
+  </NavLink>
+);
+
 const Sidebar = () => {
-  const [user, setUser] = useState(null);
-  const { id } = useParams();
+  const [user, setUser]          = useState(null);
+  const [unreadCount, setUnread] = useState(0);
+  const { id }  = useParams();
   const navigate = useNavigate();
   const { onLogout } = useContext(AuthContext);
 
@@ -22,155 +61,193 @@ const Sidebar = () => {
       .then(r => setUser(r.data)).catch(() => {});
   }, []);
 
-  const handleLogout = () => {
-    onLogout();
-    navigate('/login');
-  };
+  useEffect(() => {
+    if (!user || user.role !== 'admin') return;
+    const fetch = () => {
+      api.get('/api/admin/notifications')
+        .then(r => setUnread((r.data || []).filter(n => !n.is_read).length))
+        .catch(() => {});
+    };
+    fetch();
+    const t = setInterval(fetch, 60000);
+    return () => clearInterval(t);
+  }, [user]);
+
+  const handleLogout = () => { onLogout(); navigate('/login'); };
+
+  const quotaPct = user?.patient_limit > 0
+    ? (user.patients_used / user.patient_limit) * 100 : 0;
+  const quotaColor = quotaPct >= 90 ? '#DC2626' : quotaPct >= 70 ? '#F59E0B' : '#16A34A';
 
   return (
     <div style={{
-      width: '232px', minHeight: '100vh', flexShrink: 0,
-      background: 'rgba(5,10,20,0.97)',
-      borderRight: '1px solid rgba(255,255,255,0.06)',
-      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+      width: '220px', minHeight: '100vh', flexShrink: 0,
+      background: '#FFFFFF',
+      borderRight: '1px solid #E5E7EB',
+      boxShadow: '1px 0 4px rgba(0,0,0,0.04)',
       display: 'flex', flexDirection: 'column',
-      padding: '24px 14px',
+      padding: '20px 12px',
       position: 'sticky', top: 0, zIndex: 50,
     }}>
 
-      {/* ── Logo ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '0 6px', marginBottom: '28px' }}>
+      {/* ── Logo ─────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 4px', marginBottom: '24px' }}>
         <div style={{
-          width: '38px', height: '38px', borderRadius: '12px', flexShrink: 0,
-          background: 'linear-gradient(135deg, #22D3EE 0%, #14B8A6 100%)',
-          boxShadow: '0 4px 20px rgba(34,211,238,0.35)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: '40px', height: '40px', borderRadius: '8px', flexShrink: 0,
+          background: '#FFF',
+          border: '1px solid #E5E7EB',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
         }}>
-          <Activity style={{ width: '20px', height: '20px', color: '#030D18' }} />
+          <img src="/logo.jpg" alt="PartoSathi Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
         <div>
           <div style={{
-            fontFamily: 'Poppins, sans-serif', fontSize: '16px', fontWeight: 700,
-            color: '#F9FAFB', lineHeight: 1, letterSpacing: '-0.01em',
+            fontFamily: 'Inter, system-ui, sans-serif', fontSize: '15px', fontWeight: 700,
+            color: '#111827', letterSpacing: '-0.01em',
           }}>
-            e-Partogram
+            PartoSathi
           </div>
           <div style={{
-            fontSize: '9px', color: '#4B5563', textTransform: 'uppercase',
-            letterSpacing: '0.12em', fontWeight: 600, marginTop: '3px',
+            fontSize: '10px', color: '#9CA3AF', textTransform: 'uppercase',
+            letterSpacing: '0.08em', fontWeight: 500, marginTop: '1px',
           }}>
-            ColpAI Engine
+            Clinical System
           </div>
         </div>
       </div>
 
-      {/* ── AI Pulse chip ─────────────────────────────────────────── */}
+      {/* ── AI status chip ─────────────────────────────────────────── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '8px',
-        padding: '9px 14px', marginBottom: '22px',
-        background: 'rgba(34,211,238,0.06)',
-        border: '1px solid rgba(34,211,238,0.14)',
-        borderRadius: '11px',
-        boxShadow: '0 0 20px rgba(34,211,238,0.04) inset',
+        display: 'flex', alignItems: 'center', gap: '6px',
+        padding: '7px 10px', marginBottom: '20px',
+        background: '#F0FDF4',
+        border: '1px solid #BBF7D0',
+        borderRadius: '6px',
       }}>
         <span style={{
-          width: '8px', height: '8px', borderRadius: '50%',
-          background: '#22D3EE', flexShrink: 0,
-          boxShadow: '0 0 10px rgba(34,211,238,0.9)',
-          animation: 'ai-pulse-anim 1.8s ease-in-out infinite',
+          width: '6px', height: '6px', borderRadius: '50%',
+          background: '#16A34A', flexShrink: 0,
+          animation: 'pulse-soft 2s ease-in-out infinite',
         }} />
-        <Zap style={{ width: '11px', height: '11px', color: '#22D3EE' }} />
         <span style={{
-          fontSize: '10px', fontWeight: 700, color: '#22D3EE',
-          textTransform: 'uppercase', letterSpacing: '0.09em',
+          fontSize: '11px', fontWeight: 600, color: '#15803D',
+          letterSpacing: '0.02em',
         }}>
           AI Monitoring Active
         </span>
       </div>
 
-      {/* ── Divider ──────────────────────────────────────────────── */}
-      <div style={{ height: '1px', background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.06), transparent)', margin: '0 4px 18px' }} />
+      {/* ── Divider ──────────────────────────────────────────────────── */}
+      <div style={{ height: '1px', background: '#F3F4F6', margin: '0 4px 14px' }} />
 
-      {/* ── Nav links ────────────────────────────────────────────── */}
-      <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
-        {NAV.map(({ to, label, icon: Icon, dynamic }) => {
+      {/* ── Nav links ─────────────────────────────────────────────── */}
+      <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        {NAV.map(({ to, label, icon, dynamic }) => {
           const href = dynamic ? (id ? `/dashboard/${id}` : '/dashboard') : to;
-          return (
-            <NavLink
-              key={label}
-              to={href}
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: '11px',
-                padding: '11px 14px', borderRadius: '11px',
-                fontSize: '14px', fontWeight: isActive ? 600 : 500,
-                fontFamily: 'Roboto, sans-serif',
-                textDecoration: 'none',
-                transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
-                border: `1px solid ${isActive ? 'rgba(34,211,238,0.18)' : 'transparent'}`,
-                background: isActive
-                  ? 'rgba(34,211,238,0.1)'
-                  : 'transparent',
-                color: isActive ? '#22D3EE' : '#9CA3AF',
-                position: 'relative',
-                boxShadow: isActive ? '0 0 20px rgba(34,211,238,0.06) inset' : 'none',
-              })}
-            >
-              {({ isActive }) => (
-                <>
-                  {/* Active glow dot */}
-                  {isActive && (
-                    <span style={{
-                      position: 'absolute', left: '-1px', top: '50%',
-                      transform: 'translateY(-50%)',
-                      width: '3px', height: '24px', borderRadius: '0 3px 3px 0',
-                      background: 'linear-gradient(180deg, #22D3EE, #0EA5E9)',
-                      boxShadow: '0 0 8px rgba(34,211,238,0.5)',
-                    }} />
-                  )}
-                  <Icon style={{
-                    width: '18px', height: '18px', flexShrink: 0,
-                    color: isActive ? '#22D3EE' : '#6B7280',
-                    transition: 'color 0.2s ease',
-                  }} />
-                  <span>{label}</span>
-                </>
-              )}
-            </NavLink>
-          );
+          return <NavItem key={label} to={href} label={label} icon={icon} />;
         })}
       </nav>
 
-      {/* ── User card ────────────────────────────────────────────── */}
+      {/* ── Admin notification bell ───────────────────────────────── */}
+      {user?.role === 'admin' && (
+        <NavLink
+          to="/admin/pending"
+          style={({ isActive }) => ({
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '9px 12px', borderRadius: '6px', marginBottom: '4px',
+            fontSize: '13.5px', fontWeight: 500, textDecoration: 'none',
+            transition: 'all 0.15s ease',
+            background: unreadCount > 0 ? '#FEF2F2' : 'transparent',
+            borderLeft: unreadCount > 0 ? '3px solid #DC2626' : '3px solid transparent',
+            color: unreadCount > 0 ? '#DC2626' : '#6B7280',
+          })}
+        >
+          <div style={{ position: 'relative' }}>
+            <Bell style={{ width: '16px', height: '16px' }} />
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: '-5px', right: '-7px',
+                background: '#DC2626', color: '#fff',
+                borderRadius: '50%', fontSize: '9px', fontWeight: 700,
+                width: '14px', height: '14px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </div>
+          <span>Approvals {unreadCount > 0 ? `(${unreadCount})` : ''}</span>
+        </NavLink>
+      )}
+
+      {/* ── Quota meter ──────────────────────────────────────────── */}
+      {user?.role === 'doctor' && user.patient_limit > 0 && (
+        <div style={{
+          margin: '4px 0 8px', padding: '10px 12px',
+          background: '#F9FAFB',
+          border: '1px solid #E5E7EB', borderRadius: '6px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Credits
+            </span>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: quotaColor, fontFamily: 'DM Mono, monospace' }}>
+              {user.patients_used}/{user.patient_limit}
+            </span>
+          </div>
+          <div style={{ height: '4px', background: '#E5E7EB', borderRadius: '9999px', overflow: 'hidden', marginBottom: '8px' }}>
+            <div style={{
+              height: '100%', borderRadius: '9999px',
+              width: `${Math.min(100, quotaPct)}%`,
+              background: quotaColor,
+              transition: 'width 0.5s ease',
+            }} />
+          </div>
+          <NavLink to="/productivity" style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+            padding: '5px 10px', borderRadius: '5px', textDecoration: 'none',
+            fontSize: '11px', fontWeight: 600, color: '#2563EB',
+            background: '#EFF6FF', border: '1px solid #BFDBFE',
+          }}>
+            <CreditCard style={{ width: '11px', height: '11px' }} />
+            <span>Request Credits</span>
+          </NavLink>
+        </div>
+      )}
+
+      {/* ── Divider ───────────────────────────────────────────────── */}
+      <div style={{ height: '1px', background: '#F3F4F6', margin: '8px 4px' }} />
+
+      {/* ── User card ─────────────────────────────────────────────── */}
       {user && (
         <div style={{
-          margin: '18px 0 10px',
-          padding: '13px',
-          background: 'rgba(255,255,255,0.025)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          borderRadius: '13px',
+          padding: '10px 12px',
+          background: '#F9FAFB',
+          border: '1px solid #E5E7EB',
+          borderRadius: '6px', marginBottom: '6px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
-              width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
-              background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.18)',
+              width: '30px', height: '30px', borderRadius: '6px', flexShrink: 0,
+              background: '#EFF6FF', border: '1px solid #BFDBFE',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 0 14px rgba(34,211,238,0.1) inset',
             }}>
-              <span style={{ fontFamily: 'Poppins, sans-serif', fontSize: '15px', fontWeight: 700, color: '#22D3EE' }}>
+              <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '13px', fontWeight: 700, color: '#2563EB' }}>
                 {user.name?.charAt(0).toUpperCase()}
               </span>
             </div>
             <div style={{ minWidth: 0 }}>
               <p style={{
-                fontSize: '13px', fontWeight: 600, color: '#D1D5DB',
-                margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                fontSize: '12.5px', fontWeight: 600, color: '#111827', margin: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {user.name}
               </p>
               {user.license_number && (
                 <p style={{
-                  fontSize: '9px', color: '#4B5563', fontWeight: 700,
-                  textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: '2px',
+                  fontSize: '9.5px', color: '#9CA3AF', fontWeight: 500,
+                  textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: '1px',
+                  fontFamily: 'DM Mono, monospace',
                 }}>
                   {user.license_number}
                 </p>
@@ -180,30 +257,29 @@ const Sidebar = () => {
         </div>
       )}
 
-      {/* ── Sign out ─────────────────────────────────────────────── */}
+      {/* ── Sign out ──────────────────────────────────────────────── */}
       <button
         onClick={handleLogout}
         style={{
-          display: 'flex', alignItems: 'center', gap: '11px',
-          padding: '10px 14px', borderRadius: '11px',
-          fontSize: '14px', fontWeight: 500,
-          fontFamily: 'Roboto, sans-serif',
-          color: '#4B3333',
-          background: 'none', border: '1px solid transparent',
-          cursor: 'pointer', transition: 'all 0.2s ease', width: '100%',
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '9px 12px', borderRadius: '6px',
+          fontSize: '13px', fontWeight: 500,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          color: '#6B7280', background: 'none', border: '1px solid transparent',
+          cursor: 'pointer', transition: 'all 0.15s ease', width: '100%',
         }}
         onMouseOver={e => {
-          e.currentTarget.style.background = 'rgba(239,68,68,0.07)';
-          e.currentTarget.style.color = '#F87171';
-          e.currentTarget.style.borderColor = 'rgba(239,68,68,0.14)';
+          e.currentTarget.style.background = '#FEF2F2';
+          e.currentTarget.style.color = '#DC2626';
+          e.currentTarget.style.borderColor = '#FECACA';
         }}
         onMouseOut={e => {
           e.currentTarget.style.background = 'none';
-          e.currentTarget.style.color = '#4B3333';
+          e.currentTarget.style.color = '#6B7280';
           e.currentTarget.style.borderColor = 'transparent';
         }}
       >
-        <LogOut style={{ width: '17px', height: '17px', flexShrink: 0 }} />
+        <LogOut style={{ width: '15px', height: '15px', flexShrink: 0 }} />
         <span>Sign out</span>
       </button>
     </div>

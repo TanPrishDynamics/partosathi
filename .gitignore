@@ -1,27 +1,101 @@
 
-# Python virtual environments
+# ── Python ────────────────────────────────────────────────────────────────────
 .venv/
 .venv-1/
 venv/
 backend/venv/
+backend/venv_production/
+lstm_pipeline/venv/
 */__pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
+*.pyd
+.pytest_cache/
 
-# macOS
-.DS_Store
+# ── Node.js ───────────────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+admin-frontend/node_modules/
+.npm/
+.pnp/
+.pnp.js
 
-# Build artifacts
+# ── Build outputs — NEVER commit these ───────────────────────────────────────
 frontend/dist/
 admin-frontend/dist/
+dist/
+build/
+out/
+.next/
+.nuxt/
 
-# Environment
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.swp
+*.swo
+
+# ── Environment — NEVER commit secrets ───────────────────────────────────────
 .env
+.env.local
+.env.*.local
+backend/.env
 frontend/.env
 frontend/.env.local
 admin-frontend/.env
 admin-frontend/.env.local
 
-# ML training data & model artifacts (large binary/csv files)
+# ── Databases ─────────────────────────────────────────────────────────────────
+backend/instance/
+instance/
+*.db
+*.sqlite3
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+backend/*.log
+backend/import*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Temp / backup ─────────────────────────────────────────────────────────────
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*_copy.*
+
+# ── Cache ─────────────────────────────────────────────────────────────────────
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+node_modules/.cache/
+
+# ── Test coverage ─────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+backend/coverage.xml
+
+# ── Debug compose (exposes debugger port 9229 to 0.0.0.0 — RCE risk) ─────────
+compose.debug.yaml
+
+# ── ML training data & model artifacts (large binaries) ──────────────────────
 backend/ml/synthetic_labor_data.csv
 backend/ml/lstm_model.pth
+lstm_pipeline/data/
+
+# ── CI security scan reports ──────────────────────────────────────────────────
+pip-audit.json
+bandit-report.json

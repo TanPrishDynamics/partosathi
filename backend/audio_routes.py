@@ -30,6 +30,12 @@ _AUDIO_SIGNATURES = [
 
 _MAX_AUDIO_BYTES = 10 * 1024 * 1024  # 10 MB hard limit
 
+# M-4: hard cap on transcript length. The regex-based NLP extractor in
+# clinical_decision_support.py runs O(n) per pattern; a 1 MB transcript would
+# CPU-starve the worker without this cap. 10,000 chars comfortably covers any
+# realistic voice-note clinical observation.
+_MAX_TRANSCRIPT_CHARS = 10_000
+
 
 def _validate_audio_signature(file_obj):
     """
@@ -63,8 +69,14 @@ def voice_input():
 
     # ── Mode A: Pre-transcribed text (for frontend Web Speech API) ──
     if request.is_json:
-        body = request.get_json()
-        transcript = body.get("transcript", "").strip()
+        body = request.get_json() or {}
+        transcript = (body.get("transcript") or "").strip()
+        # M-4: enforce transcript length before passing to the regex extractor.
+        if len(transcript) > _MAX_TRANSCRIPT_CHARS:
+            return jsonify({
+                "success": False,
+                "error": f"Transcript too long (max {_MAX_TRANSCRIPT_CHARS} chars).",
+            }), 413
 
     # ── Mode B: Audio file blob ──────────────────────────────────────
     elif "audio" in request.files:
@@ -136,13 +148,19 @@ def extract_text():
     (used when the browser's Web Speech API does the transcription natively).
     Body: { "transcript": "dilation 5 cm at hour 4, contractions 3..." }
     """
-    body = request.get_json()
+    body = request.get_json() or {}
     if not body or "transcript" not in body:
         return jsonify({"success": False, "error": "Missing 'transcript' field."}), 400
 
-    transcript = body["transcript"].strip()
+    transcript = (body.get("transcript") or "").strip()
     if not transcript:
         return jsonify({"success": False, "error": "Empty transcript."}), 400
+    # M-4: same cap as voice-input.
+    if len(transcript) > _MAX_TRANSCRIPT_CHARS:
+        return jsonify({
+            "success": False,
+            "error": f"Transcript too long (max {_MAX_TRANSCRIPT_CHARS} chars).",
+        }), 413
 
     result = extract_clinical_data(transcript)
 

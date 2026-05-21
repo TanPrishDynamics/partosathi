@@ -57,15 +57,15 @@ const EditPatientModal = ({ patient, onSave, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#0A0F1E]/90 backdrop-blur-md" onClick={onClose}></div>
-      
-      <div className="glass-card w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative animate-in fade-in zoom-in duration-300 border-[#00C9A7]/20">
-        <div className="p-6 border-b border-white/10 flex items-center justify-between gradient-teal/10">
+      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={onClose}></div>
+
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative animate-in fade-in zoom-in duration-300">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold font-display">Edit Patient Details</h2>
-            <p className="text-sm text-slate-400">Updating record for {patient.patient_id}</p>
+            <h2 className="text-2xl font-bold font-display text-slate-800">Edit Patient Details</h2>
+            <p className="text-sm text-slate-500">Updating record for {patient.patient_id}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors cursor-pointer text-slate-400">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer text-slate-500">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -75,10 +75,10 @@ const EditPatientModal = ({ patient, onSave, onClose }) => {
             <div className="md:col-span-2">
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Full Name</label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00C9A7]" />
-                <input 
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-600" />
+                <input
                   type="text" name="name" value={formData.name} onChange={handleChange} required
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 focus:border-[#00C9A7] outline-none transition-all font-medium"
+                  className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl pl-12 pr-4 py-3 focus:border-indigo-400 outline-none transition-all font-medium"
                 />
               </div>
             </div>
@@ -87,7 +87,7 @@ const EditPatientModal = ({ patient, onSave, onClose }) => {
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Age (Years)</label>
               <input 
                 type="number" name="age" value={formData.age} onChange={handleChange} required
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-[#00C9A7] outline-none transition-all font-medium"
+                className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-3 focus:border-indigo-400 outline-none transition-all font-medium"
               />
             </div>
 
@@ -95,7 +95,7 @@ const EditPatientModal = ({ patient, onSave, onClose }) => {
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Gestational Age (Weeks)</label>
               <input 
                 type="number" name="gestational_age" value={formData.gestational_age} onChange={handleChange} required
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-[#00C9A7] outline-none transition-all font-medium"
+                className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-3 focus:border-indigo-400 outline-none transition-all font-medium"
               />
             </div>
 
@@ -103,7 +103,7 @@ const EditPatientModal = ({ patient, onSave, onClose }) => {
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Gravida</label>
               <input 
                 type="number" name="gravida" value={formData.gravida} onChange={handleChange} required
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-[#00C9A7] outline-none transition-all font-medium"
+                className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-3 focus:border-indigo-400 outline-none transition-all font-medium"
               />
             </div>
 
@@ -111,17 +111,17 @@ const EditPatientModal = ({ patient, onSave, onClose }) => {
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Parity</label>
               <input 
                 type="number" name="parity" value={formData.parity} onChange={handleChange} required
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-[#00C9A7] outline-none transition-all font-medium"
+                className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-3 focus:border-indigo-400 outline-none transition-all font-medium"
               />
             </div>
 
             <div className="md:col-span-2">
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Admission Timestamp</label>
               <div className="relative">
-                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00C9A7]" />
+                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-600" />
                 <input 
                   type="datetime-local" name="admission_time" value={formData.admission_time} onChange={handleChange} required
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 focus:border-[#00C9A7] outline-none transition-all font-medium"
+                  className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl pl-12 pr-4 py-3 focus:border-indigo-400 outline-none transition-all font-medium"
                 />
               </div>
             </div>
@@ -129,20 +129,20 @@ const EditPatientModal = ({ patient, onSave, onClose }) => {
             <div className="md:col-span-2">
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Membrane Rupture Time (Optional)</label>
               <div className="relative">
-                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00C9A7]" />
+                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-600" />
                 <input 
                   type="datetime-local" name="membrane_rupture_time" value={formData.membrane_rupture_time} onChange={handleChange}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 focus:border-[#00C9A7] outline-none transition-all font-medium"
+                  className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl pl-12 pr-4 py-3 focus:border-indigo-400 outline-none transition-all font-medium"
                 />
               </div>
             </div>
           </div>
         </form>
 
-        <div className="p-6 border-t border-white/10 flex items-center justify-end space-x-4">
-          <button 
+        <div className="p-6 border-t border-slate-200 flex items-center justify-end space-x-4">
+          <button
             type="button" onClick={onClose}
-            className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="px-6 py-2.5 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
           >
             Cancel
           </button>

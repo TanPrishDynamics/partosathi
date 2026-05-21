@@ -27,17 +27,19 @@ ChartJS.register(
 const FHRChart = ({ patient, observations }) => {
   if (!patient || !observations) return null;
   
-  const admissionTime = new Date(patient.admission_time);
+  const admissionTime = React.useMemo(() => new Date(patient.admission_time), [patient.admission_time]);
   
-  const fhrData = observations
-    .filter(obs => obs.fetal_heart_rate !== null)
-    .map(obs => ({
-      x: differenceInHours(new Date(obs.timestamp), admissionTime),
-      y: obs.fetal_heart_rate
-    }))
-    .sort((a, b) => a.x - b.x);
+  const fhrData = React.useMemo(() =>
+    observations
+      .filter(obs => obs.fetal_heart_rate !== null)
+      .map(obs => ({
+        x: differenceInHours(new Date(obs.timestamp), admissionTime),
+        y: obs.fetal_heart_rate
+      }))
+      .sort((a, b) => a.x - b.x),
+  [observations, patient.admission_time]);
 
-  const data = {
+  const data = React.useMemo(() => ({
     datasets: [
       {
         label: 'Fetal Heart Rate (bpm)',
@@ -51,16 +53,17 @@ const FHRChart = ({ patient, observations }) => {
         fill: true,
       }
     ],
-  };
+  }), [fhrData]);
 
-  const options = {
+  const options = React.useMemo(() => ({
+    animation: false,
     responsive: true,
     maintainAspectRatio: false,
     scales: {
       x: {
         type: 'linear',
         min: 0,
-        max: Math.max(12, ...fhrData.map(d => d.x + 2)),
+        max: fhrData.length > 0 ? fhrData.reduce((m, d) => Math.max(m, d.x + 2), 12) : 12,
         ticks: { color: '#94A3B8' },
         grid: { color: 'rgba(255, 255, 255, 0.05)' }
       },
@@ -69,7 +72,6 @@ const FHRChart = ({ patient, observations }) => {
         max: 200,
         ticks: { color: '#94A3B8' },
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        // Highlighting normal range 110-160
         suggestedMin: 110,
         suggestedMax: 160
       }
@@ -81,7 +83,7 @@ const FHRChart = ({ patient, observations }) => {
         titleColor: '#F87171',
       }
     }
-  };
+  }), [fhrData]);
 
   return (
     <div className="glass-card p-5 h-[220px] flex flex-col">

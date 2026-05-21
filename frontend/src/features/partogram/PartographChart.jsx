@@ -70,9 +70,12 @@ const PartographChart = ({ patient, observations }) => {
 
   useEffect(() => {
     if (patient?.patient_id && observations?.length > 0) {
-      // H-2: Use api instance (sends httpOnly cookie automatically)
-      api.get(`/api/cds/predict-delivery/${patient.patient_id}`)
-        .then(r => { if (r.data.success) setAiData(r.data); })
+      // Use the new Production-Grade V2 LSTM Predictor
+      api.get(`/api/v2/cds/predict-delivery/${patient.patient_id}`)
+        .then(r => { 
+          // New contract check
+          if (!r.data.error) setAiData(r.data); 
+        })
         .catch(() => {});
     }
   }, [patient?.patient_id, observations]);
@@ -145,7 +148,8 @@ const PartographChart = ({ patient, observations }) => {
   if (!patient || !observations || observations.length === 0 || !parsedObs) return null;
 
   // ── Build Chart.js datasets ────────────────────────────────────────────
-  const datasets = [
+  const chartData = React.useMemo(() => ({
+    datasets: [
     // Latent phase — dashed grey
     ...(latentData.length > 0 ? [{
       label: 'Latent Phase',
@@ -164,8 +168,8 @@ const PartographChart = ({ patient, observations }) => {
     {
       label: 'Cervical Dilation',
       data: activeData,
-      borderColor: '#00C9A7',
-      backgroundColor: '#00C9A7',
+      borderColor: '#6366F1',
+      backgroundColor: '#6366F1',
       pointStyle: 'crossRot',
       pointRadius: 8,
       pointHoverRadius: 11,
@@ -209,10 +213,11 @@ const PartographChart = ({ patient, observations }) => {
       tension: 0,
       yAxisID: 'y1',
     },
-  ];
+  ]}), [latentData, activeData, stationData, alertLine, actionLine]);
 
 
-  const options = {
+  const options = React.useMemo(() => ({
+    animation: false,
     responsive: true,
     maintainAspectRatio: false,
     interaction: {
@@ -231,20 +236,20 @@ const PartographChart = ({ patient, observations }) => {
         min: 0,
         max: maxHours + 1,
         ticks: { color: '#94A3B8', stepSize: 1 },
-        grid: { color: 'rgba(255,255,255,0.05)' },
+        grid: { color: 'rgba(0,0,0,0.05)' },
       },
       y: {
         type: 'linear',
         title: {
           display: true,
           text: 'Cervical Dilation (cm)',
-          color: '#00C9A7',
+          color: '#6366F1',
           font: { size: 11, weight: '700' },
         },
         min: 0,
         max: 10,
-        ticks: { color: '#00C9A7', stepSize: 1 },
-        grid: { color: 'rgba(255,255,255,0.08)' },
+        ticks: { color: '#6366F1', stepSize: 1 },
+        grid: { color: 'rgba(0,0,0,0.06)' },
       },
       y1: {
         type: 'linear',
@@ -270,10 +275,10 @@ const PartographChart = ({ patient, observations }) => {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: 'rgba(10, 15, 30, 0.97)',
-        titleColor: '#E2E8F0',
-        bodyColor: '#CBD5E1',
-        borderColor: 'rgba(0, 201, 167, 0.3)',
+        backgroundColor: 'rgba(255, 255, 255, 0.97)',
+        titleColor: '#0F172A',
+        bodyColor: '#475569',
+        borderColor: 'rgba(99, 102, 241, 0.3)',
         borderWidth: 1,
         padding: 14,
         callbacks: {
@@ -315,9 +320,8 @@ const PartographChart = ({ patient, observations }) => {
         },
       },
     },
-  };
+  }), [maxHours, parsedObs, timeAt4cm]);
 
-  const chartData = { datasets };
   const classStyle = whoResult ? CLASS_STYLES[whoResult.status] : CLASS_STYLES.NORMAL;
   const ClassIcon = classStyle.icon;
   const graphStyle = whoResult ? CLASS_STYLES[whoResult.graph_status] : CLASS_STYLES.NORMAL;
@@ -325,18 +329,18 @@ const PartographChart = ({ patient, observations }) => {
   const lineInfo = whoResult ? LINE_STATUS_LABEL[whoResult.lineStatus] : null;
 
   return (
-    <div className="glass-card p-6 flex flex-col space-y-4 relative overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-lg p-6 flex flex-col space-y-4 relative overflow-hidden">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
-          <h3 className="text-xl font-bold font-display text-white">WHO Partogram</h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h3 className="text-xl font-bold font-display text-slate-800">WHO Partogram</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
             WHO (2020) Labour Care Guide — strict alert/action line geometry
           </p>
           {timeAt4cm !== null && (
             <p className="text-[11px] text-slate-500 mt-1">
-              Active phase start: <span className="text-[#00C9A7] font-semibold">{timeAt4cm.toFixed(1)}h</span> from admission &nbsp;·&nbsp;
+              Active phase start: <span className="text-indigo-600 font-semibold">{timeAt4cm.toFixed(1)}h</span> from admission &nbsp;·&nbsp;
               Alert line: <span className="text-yellow-400 font-semibold">{timeAt4cm.toFixed(1)}h → {(timeAt4cm + 6).toFixed(1)}h</span> &nbsp;·&nbsp;
               Action line: <span className="text-red-400 font-semibold">{(timeAt4cm + 4).toFixed(1)}h → {(timeAt4cm + 10).toFixed(1)}h</span>
             </p>
@@ -362,7 +366,7 @@ const PartographChart = ({ patient, observations }) => {
           )}
           {/* AI Delivery Estimate */}
           {aiData?.estimated_time_to_full_dilation_hours > 0 && (
-            <div className="flex items-center space-x-2 bg-blue-500/20 text-blue-300 px-3 py-1.5 rounded-lg border border-blue-500/30 text-xs font-semibold">
+            <div className="flex items-center space-x-2 bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-200 text-xs font-semibold">
               <Clock className="w-3.5 h-3.5" />
               <span>Est. time to full dilation: {aiData.estimated_time_to_full_dilation_hours}h</span>
             </div>
@@ -377,10 +381,10 @@ const PartographChart = ({ patient, observations }) => {
             <ClassIcon className={`w-4 h-4 mt-0.5 shrink-0 ${classStyle.text}`} />
             <div className="flex-1 min-w-0">
               <p className={`text-sm font-semibold ${classStyle.text} mb-1`}>Clinical Insight</p>
-              <p className="text-xs text-slate-300 leading-relaxed">{whoResult.insight}</p>
+              <p className="text-xs text-slate-600 leading-relaxed">{whoResult.insight}</p>
               {/* Recommendation */}
-              <p className="text-xs text-slate-400 mt-1.5 italic">
-                <span className="not-italic font-semibold text-slate-300">Recommendation: </span>
+              <p className="text-xs text-slate-500 mt-1.5 italic">
+                <span className="not-italic font-semibold text-slate-700">Recommendation: </span>
                 {whoResult.recommendation}
               </p>
               {/* Clinical flags */}
@@ -431,13 +435,13 @@ const PartographChart = ({ patient, observations }) => {
       <div className="relative" style={{ height: 380 }}>
         {/* Active-phase zone overlay label */}
         {timeAt4cm !== null && (
-          <div className="absolute top-2 left-2 z-10 bg-[#0A0F1E]/80 border border-white/10 rounded-lg px-2 py-1">
+          <div className="absolute top-2 left-2 z-10 bg-white/90 border border-slate-200 rounded-lg px-2 py-1">
             <div className="flex items-center space-x-1">
               <span className="w-2 h-2 rounded-full bg-slate-400/50 inline-block" />
               <span className="text-[10px] text-slate-500">Latent</span>
-              <span className="text-slate-600 mx-1">|</span>
-              <span className="w-2 h-2 rounded-full bg-[#00C9A7] inline-block" />
-              <span className="text-[10px] text-[#00C9A7]">Active (≥ 4 cm)</span>
+              <span className="text-slate-400 mx-1">|</span>
+              <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
+              <span className="text-[10px] text-indigo-600">Active (≥ 4 cm)</span>
             </div>
           </div>
         )}
@@ -445,9 +449,9 @@ const PartographChart = ({ patient, observations }) => {
       </div>
 
       {/* ── Legend ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-300 pt-3 border-t border-slate-700/50">
+      <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500 pt-3 border-t border-slate-200">
         <div className="flex items-center space-x-1.5">
-          <span className="text-[#00C9A7] font-bold text-base leading-none">×</span>
+          <span className="text-indigo-600 font-bold text-base leading-none">×</span>
           <span>Active Dilation</span>
         </div>
         <div className="flex items-center space-x-1.5">
@@ -469,29 +473,53 @@ const PartographChart = ({ patient, observations }) => {
       </div>
 
       {/* ── Medical Safety Disclaimer ─────────────────────────────────────── */}
-      <div className="border-t border-slate-700/30 pt-3 flex items-start space-x-2">
-        <span className="text-[9px] text-slate-600 mt-0.5">+</span>
-        <p className="text-[10px] text-slate-600 italic leading-relaxed">
+      <div className="border-t border-slate-200 pt-3 flex items-start space-x-2">
+        <span className="text-[9px] text-slate-400 mt-0.5">+</span>
+        <p className="text-[10px] text-slate-400 italic leading-relaxed">
           <span className="font-semibold not-italic text-slate-500">Medical Disclaimer:</span>{' '}
           This tool provides clinical decision support only. All data is displayed as entered.
           Final clinical decisions must be made by a qualified obstetrician or midwife.
           This system does not replace professional clinical judgement.
         </p>
       </div>
-      {aiData?.explanations?.length > 0 && (
-        <div className="border-t border-slate-700/30 pt-3">
-          <div className="flex items-center space-x-2 mb-2">
-            <Activity className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider">LSTM Model Observations</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {aiData.explanations.map((exp, idx) => (
-              <span key={idx} className="text-[10px] px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg text-slate-300">
-                {exp}
+      {aiData && (
+        <div className="border-t border-slate-200 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <Activity className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wider">Production LSTM Engine (v2)</span>
+            </div>
+            {aiData.confidence && (
+              <span className="text-[10px] text-slate-500">
+                Confidence: <span className="text-indigo-600">{(aiData.confidence * 100).toFixed(1)}%</span>
               </span>
-            ))}
+            )}
           </div>
-          <p className="text-[9px] text-slate-600 italic mt-1.5">AI model output — requires clinical validation</p>
+          
+          <div className="flex flex-wrap items-center gap-4 mb-3">
+            <div className="flex flex-col">
+              <span className="text-[9px] text-slate-500 uppercase">Est. Delivery</span>
+              <span className="text-sm font-bold text-white">{aiData.delivery_time_hours} hrs</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] text-slate-500 uppercase">Risk Level</span>
+              <span className={`text-sm font-bold ${
+                aiData.risk_level === 'Emergency' ? 'text-red-400' : 
+                aiData.risk_level === 'Prolonged' ? 'text-amber-400' : 'text-emerald-400'
+              }`}>{aiData.risk_level}</span>
+            </div>
+          </div>
+
+          {aiData.flags?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {aiData.flags.map((flag, idx) => (
+                <span key={idx} className="text-[10px] px-2 py-0.5 bg-indigo-50 border border-indigo-200 rounded text-indigo-600">
+                  {flag}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="text-[9px] text-slate-600 italic mt-1.5">{aiData.disclaimer}</p>
         </div>
       )}
     </div>
