@@ -7,9 +7,7 @@ import tempfile
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'ml'))
-from nlp_extractor import extract_clinical_data, transcribe_audio_file
+from ai.nlp_extractor import extract_clinical_data, transcribe_audio_file
 
 audio_bp = Blueprint('audio', __name__)
 
