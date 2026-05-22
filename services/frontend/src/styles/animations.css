@@ -1,0 +1,123 @@
+/*
+ * animations.css — All @keyframes and animation utility classes.
+ * Warm, organic motion — no mechanical cyber-blink effects.
+ */
+
+/* ── KEYFRAMES ──────────────────────────────────────────────────────────── */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);     }
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0);      }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1);     }
+}
+@keyframes bloom {
+  0%   { transform: scale(0.94); opacity: 0; }
+  55%  { transform: scale(1.03); }
+  100% { transform: scale(1);    opacity: 1; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1;    }
+  50%       { opacity: 0.55; }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(0.97); box-shadow: 0 0 0 0   rgba(232,130,26,0.25); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 8px  rgba(232,130,26,0);   }
+  100% { transform: scale(0.97); box-shadow: 0 0 0 0   rgba(232,130,26,0);    }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0);      }
+}
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1);    }
+  14%       { transform: scale(1.15); }
+  28%       { transform: scale(1);    }
+  42%       { transform: scale(1.10); }
+  56%       { transform: scale(1);    }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0);   }
+  50%       { transform: translateY(-3px); }
+}
+
+/* ── UTILITY CLASSES ────────────────────────────────────────────────────── */
+
+.animate-fade-in     { animation: fadeIn       0.35s var(--transition-base)   both; }
+.animate-fade-up     { animation: fadeInUp     0.40s var(--transition-base)   both; }
+.animate-fade-down   { animation: fadeInDown   0.40s var(--transition-base)   both; }
+.animate-scale-in    { animation: scaleIn      0.35s var(--transition-bounce) both; }
+.animate-bloom       { animation: bloom        0.50s var(--transition-bounce) both; }
+.animate-slide-right { animation: slideInRight 0.40s var(--transition-base)   both; }
+.animate-slide-left  { animation: slideInLeft  0.40s var(--transition-base)   both; }
+.animate-pulse       { animation: pulse-soft   2.0s  ease-in-out infinite; }
+.animate-heartbeat   { animation: heartbeat    1.4s  ease-in-out infinite; }
+.animate-spin        { animation: spin         0.8s  linear      infinite; }
+.animate-float       { animation: float        3.0s  ease-in-out infinite; }
+
+/* ── STAGGER entry delays for lists / grids ─────────────────────────────── */
+
+.stagger > *:nth-child(1) { animation-delay:   0ms; }
+.stagger > *:nth-child(2) { animation-delay:  60ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 180ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(6) { animation-delay: 300ms; }
+.stagger > *:nth-child(7) { animation-delay: 360ms; }
+.stagger > *:nth-child(8) { animation-delay: 420ms; }
+
+/* ── PAGE TRANSITION ────────────────────────────────────────────────────── */
+
+.page-enter { animation: fadeInUp 0.45s var(--transition-base) both; }
+
+/* ── LOADING SPINNER ────────────────────────────────────────────────────── */
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--color-border-soft);
+  border-top-color: var(--color-primary-400);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+.spinner-lg {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+}
+
+/* ── SHIMMER SKELETON ───────────────────────────────────────────────────── */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-subtle) 25%,
+    var(--color-primary-50) 50%,
+    var(--color-bg-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}

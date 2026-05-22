@@ -1,8 +1,15 @@
 version: '3.8'
 
 # ── e-Partogram Production Stack ─────────────────────────────────────────────
+# Enterprise SaaS Architecture — restructured 2026-05
 # All secrets come from .env — never hardcoded here.
-# Run:  cp backend/.env .env   then fill in real values before deploying.
+# Run:  cp .env.example .env   then fill in real values before deploying.
+#
+# Directory layout (post-restructure):
+#   services/backend/        — Flask API (Dockerfile at docker/backend/)
+#   services/frontend/       — Doctor SPA (Dockerfile at docker/frontend/)
+#   services/admin-frontend/ — Admin SPA (Dockerfile at docker/admin-frontend/)
+#   docker/nginx/            — Nginx config & TLS certs
 #
 # Security decisions:
 #   - DB port NOT exposed to host (internal network only)
@@ -20,8 +27,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/certs:/etc/nginx/certs:ro        # self-signed (dev) or Let's Encrypt (prod)
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/certs:/etc/nginx/certs:ro        # self-signed (dev) or Let's Encrypt (prod)
     depends_on:
       - backend
     networks:
@@ -50,8 +57,8 @@ services:
   # ── Flask backend ────────────────────────────────────────────────────────────
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: ./services/backend
+      dockerfile: ../../docker/backend/Dockerfile
     restart: unless-stopped
     env_file: .env                               # all secrets from environment file
     environment:
@@ -67,11 +74,22 @@ services:
       - partogram_net
     # No ports exposed to host — traffic only via Nginx
 
-  # ── React frontend (prod build served by Nginx above) ───────────────────────
+  # ── React doctor frontend (prod build served by Nginx above) ─────────────────
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: ./services/frontend
+      dockerfile: ../../docker/frontend/Dockerfile
+    restart: unless-stopped
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-https://localhost}
+    networks:
+      - partogram_net
+
+  # ── React admin frontend ──────────────────────────────────────────────────────
+  admin-frontend:
+    build:
+      context: ./services/admin-frontend
+      dockerfile: ../../docker/admin-frontend/Dockerfile
     restart: unless-stopped
     environment:
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-https://localhost}

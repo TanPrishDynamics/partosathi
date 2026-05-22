@@ -1,0 +1,41 @@
+{
+  "name": "e-partogram",
+  "version": "1.0.0",
+  "description": "e-Partogram — Enterprise Healthcare SaaS Platform (WHO Partograph Digital System)",
+  "private": true,
+  "workspaces": [
+    "services/frontend",
+    "services/admin-frontend"
+  ],
+  "scripts": {
+    "dev:frontend": "cd services/frontend && npm run dev",
+    "dev:admin": "cd services/admin-frontend && npm run dev",
+    "build:frontend": "cd services/frontend && npm run build",
+    "build:admin": "cd services/admin-frontend && npm run build",
+    "lint:frontend": "cd services/frontend && npm run lint",
+    "lint:admin": "cd services/admin-frontend && npm run lint",
+    "docker:up": "docker-compose up --build",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "clean": "find . -name 'node_modules' -type d -not -path '*/.git/*' | xargs rm -rf"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kushalvermaaven/E-Partogram"
+  },
+  "keywords": [
+    "healthcare",
+    "partogram",
+    "WHO",
+    "HIPAA",
+    "maternal-health",
+    "clinical-decision-support",
+    "AI",
+    "LSTM"
+  ],
+  "license": "UNLICENSED"
+}
