@@ -51,7 +51,7 @@ google-generativeai==0.8.5   # Gemini clinical summary (key via env only)
 torch>=2.4.0
 pandas>=2.2.2
 numpy>=1.26.4
-scikit-learn>=1.5.1
+scikit-learn>=1.8.0
 # NOTE: tensorflow has been REMOVED (audit finding I-1) — it was listed in
 # the previous revision but never imported by any code path in backend/.
 # Removing it cuts ~600 MB from the production image and eliminates a large
