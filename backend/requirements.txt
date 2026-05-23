@@ -12,8 +12,8 @@ gunicorn==22.0.0         # Production WSGI server (replaces dev Flask server)
 # ── Database ORM ──────────────────────────────────────────────────────────────
 Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.49
-PyMySQL==1.1.1           # MySQL driver (optional)
-psycopg2-binary==2.9.9   # PostgreSQL driver (production default per docker-compose)
+# PyMySQL==1.1.1           # MySQL driver (optional)
+# psycopg2-binary==2.9.9   # PostgreSQL driver (production default per docker-compose)
 
 # ── Authentication & Security ─────────────────────────────────────────────────
 Flask-JWT-Extended==4.7.1
@@ -48,10 +48,10 @@ reportlab==4.2.5         # PDF generation for partogram export
 google-generativeai==0.8.5   # Gemini clinical summary (key via env only)
 
 # ── ML — all versions pinned for supply-chain safety ─────────────────────────
-torch==2.4.0
-pandas==2.2.2
-numpy==1.26.4
-scikit-learn==1.5.1
+torch>=2.4.0
+pandas>=2.2.2
+numpy>=1.26.4
+scikit-learn>=1.5.1
 # NOTE: tensorflow has been REMOVED (audit finding I-1) — it was listed in
 # the previous revision but never imported by any code path in backend/.
 # Removing it cuts ~600 MB from the production image and eliminates a large

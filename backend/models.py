@@ -15,6 +15,16 @@ Multi-tenant RBAC:
   - SUPER_ADMIN  → Admin model
   - HOSPITAL     → Hospital model (enterprise client)
   - DOCTOR       → Doctor model (individual practitioner)
+
+Phase-5 tenant isolation (this revision):
+  - Patient.doctor_id is now NOT NULL with composite indexes for
+    (doctor_id, status), (doctor_id, admission_time).
+  - AuditLog gains a typed doctor_id Integer column (kept alongside the legacy
+    user_id String for backward compatibility — joinable for analytics).
+  - New per-doctor entity tables added:
+      LaborRecord, FetalMonitoring, AIPrediction, Report,
+      UploadedFile, Appointment, Prescription
+    Each carries doctor_id NOT NULL + index, enforced via repository layer.
 """
 import logging
 import os
@@ -271,13 +281,27 @@ class Patient(db.Model):
     admission_time        = db.Column(db.DateTime,      default=datetime.utcnow)
     membrane_rupture_time = db.Column(db.DateTime,      nullable=True)
     status                = db.Column(db.String(20),    default="Active")
-    doctor_id             = db.Column(db.Integer,       db.ForeignKey("doctors.id"), nullable=True)
+    # Phase-5: doctor_id is NOT NULL going forward. Legacy NULL rows are
+    # surfaced by scripts/tenant_isolation_migration.py and reassigned or
+    # quarantined before the constraint is enforced at the DB layer.
+    doctor_id             = db.Column(db.Integer,       db.ForeignKey("doctors.id"),
+                                      nullable=False, index=True)
     consent_obtained      = db.Column(db.Boolean,       default=False, nullable=False)
     consent_date          = db.Column(db.DateTime,      nullable=True)
     consent_method        = db.Column(db.String(30),    nullable=True)
 
     observations = db.relationship("Observation", backref="patient", lazy=True, cascade="all, delete-orphan")
     alerts       = db.relationship("Alert",       backref="patient", lazy=True, cascade="all, delete-orphan")
+
+    # Composite indexes for doctor-scoped queries. Backs:
+    #   .filter(doctor_id == X).order_by(admission_time)
+    #   .filter(doctor_id == X, status == 'Active')
+    __table_args__ = (
+        db.Index("ix_patients_doctor_admission",
+                 "doctor_id", "admission_time"),
+        db.Index("ix_patients_doctor_status",
+                 "doctor_id", "status"),
+    )
 
     def to_dict(self):
         return {
@@ -407,16 +431,30 @@ class Alert(db.Model):
 # ── AuditLog ──────────────────────────────────────────────────────────────────
 
 class AuditLog(db.Model):
-    """HIPAA §164.312(b) — PHI access audit trail (no PHI payload stored)."""
+    """
+    HIPAA §164.312(b) — PHI access audit trail (no PHI payload stored).
+
+    Phase-5: doctor_id added as a typed FK alongside the legacy `user_id` string.
+    Both are populated when the actor is a doctor; only `user_id`/`user_role`
+    when the actor is a hospital or admin. The typed FK allows fast joins
+    when investigating per-tenant access patterns.
+    """
     __tablename__ = "audit_logs"
     id          = db.Column(db.Integer,   primary_key=True)
     timestamp   = db.Column(db.DateTime,  default=datetime.utcnow, nullable=False, index=True)
     user_id     = db.Column(db.String(20), nullable=True)
     user_role   = db.Column(db.String(20), nullable=True)
-    action      = db.Column(db.String(10), nullable=False)
-    resource    = db.Column(db.String(80), nullable=False)
+    action      = db.Column(db.String(20), nullable=False)
+    resource    = db.Column(db.String(120), nullable=False)
     ip_address  = db.Column(db.String(45), nullable=True)
     status_code = db.Column(db.Integer,   nullable=True)
+    doctor_id   = db.Column(db.Integer,   db.ForeignKey("doctors.id"),
+                            nullable=True, index=True)
+
+    __table_args__ = (
+        db.Index("ix_audit_logs_doctor_time", "doctor_id", "timestamp"),
+        db.Index("ix_audit_logs_action_time", "action", "timestamp"),
+    )
 
 
 # ── AdminAction ───────────────────────────────────────────────────────────────
@@ -502,4 +540,260 @@ class CreditRequest(db.Model):
             "created_at":      self.created_at.isoformat() if self.created_at else None,
             "resolved_at":     self.resolved_at.isoformat() if self.resolved_at else None,
             "resolution_note": self.resolution_note,
+        }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Phase-5: tenant-scoped entity tables.
+#
+# Every table below carries `doctor_id NOT NULL + index`. Repository functions
+# in utils.repository are the only authorised callers — controllers MUST NOT
+# issue raw queries against these tables. The composite (doctor_id, …) indexes
+# back the most common list/by-patient access patterns.
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class LaborRecord(db.Model):
+    """Per-labor-episode record (admission → delivery summary)."""
+    __tablename__ = "labor_records"
+    id                 = db.Column(db.Integer,  primary_key=True)
+    doctor_id          = db.Column(db.Integer,  db.ForeignKey("doctors.id"),
+                                   nullable=False, index=True)
+    patient_id         = db.Column(db.Integer,  db.ForeignKey("patients.id"),
+                                   nullable=False, index=True)
+    started_at         = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    ended_at           = db.Column(db.DateTime, nullable=True)
+    delivery_mode      = db.Column(db.String(40), nullable=True)
+    outcome            = db.Column(db.String(40), nullable=True)
+    notes              = db.Column(db.String(1000), nullable=True)
+    created_at         = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.Index("ix_labor_records_doctor_patient", "doctor_id", "patient_id"),
+    )
+
+    def to_dict(self):
+        return {
+            "id":            self.id,
+            "doctor_id":     self.doctor_id,
+            "patient_id":    self.patient_id,
+            "started_at":    self.started_at.isoformat() if self.started_at else None,
+            "ended_at":      self.ended_at.isoformat() if self.ended_at else None,
+            "delivery_mode": self.delivery_mode,
+            "outcome":       self.outcome,
+            "notes":         self.notes,
+            "created_at":    self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class FetalMonitoring(db.Model):
+    """Stored fetal-monitoring trace (CTG strips, NST snapshots, etc.)."""
+    __tablename__ = "fetal_monitoring"
+    id              = db.Column(db.Integer,  primary_key=True)
+    doctor_id       = db.Column(db.Integer,  db.ForeignKey("doctors.id"),
+                                nullable=False, index=True)
+    patient_id      = db.Column(db.Integer,  db.ForeignKey("patients.id"),
+                                nullable=False, index=True)
+    recorded_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    fhr_baseline    = db.Column(db.Integer,  nullable=True)
+    variability     = db.Column(db.String(20), nullable=True)
+    accelerations   = db.Column(db.Integer,  nullable=True)
+    decelerations   = db.Column(db.String(40), nullable=True)
+    interpretation  = db.Column(db.String(60), nullable=True)   # reassuring / suspicious / pathological
+    trace_ref       = db.Column(db.String(255), nullable=True)  # UploadedFile.storage_key
+
+    __table_args__ = (
+        db.Index("ix_fm_doctor_patient_time",
+                 "doctor_id", "patient_id", "recorded_at"),
+    )
+
+    def to_dict(self):
+        return {
+            "id":             self.id,
+            "doctor_id":      self.doctor_id,
+            "patient_id":     self.patient_id,
+            "recorded_at":    self.recorded_at.isoformat() if self.recorded_at else None,
+            "fhr_baseline":   self.fhr_baseline,
+            "variability":    self.variability,
+            "accelerations":  self.accelerations,
+            "decelerations":  self.decelerations,
+            "interpretation": self.interpretation,
+            "trace_ref":      self.trace_ref,
+        }
+
+
+class AIPrediction(db.Model):
+    """
+    Persistent record of an AI inference (CDS prediction, LLM summary, etc.).
+    Doctor-scoped so analytics and model-feedback queries cannot cross tenants.
+    """
+    __tablename__ = "ai_predictions"
+    id              = db.Column(db.Integer,  primary_key=True)
+    doctor_id       = db.Column(db.Integer,  db.ForeignKey("doctors.id"),
+                                nullable=False, index=True)
+    patient_id      = db.Column(db.Integer,  db.ForeignKey("patients.id"),
+                                nullable=False, index=True)
+    model_name      = db.Column(db.String(60),  nullable=False)
+    model_version   = db.Column(db.String(40),  nullable=True)
+    prediction_type = db.Column(db.String(60),  nullable=False)   # e.g. "labor_progress"
+    inputs_hash     = db.Column(db.String(64),  nullable=True)    # SHA-256, no PHI
+    output_json     = db.Column(db.String(4000), nullable=True)
+    confidence      = db.Column(db.Float,     nullable=True)
+    created_at      = db.Column(db.DateTime, default=datetime.utcnow,
+                                nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_ai_predictions_doctor_time", "doctor_id", "created_at"),
+    )
+
+    def to_dict(self):
+        return {
+            "id":              self.id,
+            "doctor_id":       self.doctor_id,
+            "patient_id":      self.patient_id,
+            "model_name":      self.model_name,
+            "model_version":   self.model_version,
+            "prediction_type": self.prediction_type,
+            "confidence":      self.confidence,
+            "output_json":     self.output_json,
+            "created_at":      self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Report(db.Model):
+    """Generated reports (PDF, CSV) tied to a doctor + patient."""
+    __tablename__ = "reports"
+    id            = db.Column(db.Integer,  primary_key=True)
+    doctor_id     = db.Column(db.Integer,  db.ForeignKey("doctors.id"),
+                              nullable=False, index=True)
+    patient_id    = db.Column(db.Integer,  db.ForeignKey("patients.id"),
+                              nullable=True, index=True)   # nullable: practice-wide reports
+    report_type   = db.Column(db.String(40),  nullable=False)   # partogram_pdf / analytics_csv / …
+    storage_key   = db.Column(db.String(500), nullable=False)   # path under /storage/doctors/<id>/…
+    size_bytes    = db.Column(db.Integer,  nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow,
+                              nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_reports_doctor_type_time",
+                 "doctor_id", "report_type", "created_at"),
+    )
+
+    def to_dict(self):
+        return {
+            "id":          self.id,
+            "doctor_id":   self.doctor_id,
+            "patient_id":  self.patient_id,
+            "report_type": self.report_type,
+            "storage_key": self.storage_key,
+            "size_bytes":  self.size_bytes,
+            "created_at":  self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class UploadedFile(db.Model):
+    """
+    File-upload index. The actual blob lives at:
+        <STORAGE_ROOT>/doctors/<doctor_id>/patients/<patient_id>/<storage_key>
+
+    Repository serve helpers refuse to read any path that does not start with
+    the requesting doctor's prefix — see utils.storage.resolve_doctor_path().
+    """
+    __tablename__ = "uploaded_files"
+    id            = db.Column(db.Integer,  primary_key=True)
+    doctor_id     = db.Column(db.Integer,  db.ForeignKey("doctors.id"),
+                              nullable=False, index=True)
+    patient_id    = db.Column(db.Integer,  db.ForeignKey("patients.id"),
+                              nullable=True, index=True)
+    filename      = db.Column(db.String(255), nullable=False)
+    storage_key   = db.Column(db.String(500), nullable=False, unique=True)
+    content_type  = db.Column(db.String(80),  nullable=True)
+    size_bytes    = db.Column(db.Integer,  nullable=True)
+    sha256        = db.Column(db.String(64),  nullable=True)
+    uploaded_at   = db.Column(db.DateTime, default=datetime.utcnow,
+                              nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_uploaded_files_doctor_patient",
+                 "doctor_id", "patient_id"),
+    )
+
+    def to_dict(self):
+        return {
+            "id":           self.id,
+            "doctor_id":    self.doctor_id,
+            "patient_id":   self.patient_id,
+            "filename":     self.filename,
+            "storage_key":  self.storage_key,
+            "content_type": self.content_type,
+            "size_bytes":   self.size_bytes,
+            "sha256":       self.sha256,
+            "uploaded_at":  self.uploaded_at.isoformat() if self.uploaded_at else None,
+        }
+
+
+class Appointment(db.Model):
+    __tablename__ = "appointments"
+    id            = db.Column(db.Integer,  primary_key=True)
+    doctor_id     = db.Column(db.Integer,  db.ForeignKey("doctors.id"),
+                              nullable=False, index=True)
+    patient_id    = db.Column(db.Integer,  db.ForeignKey("patients.id"),
+                              nullable=False, index=True)
+    scheduled_for = db.Column(db.DateTime, nullable=False, index=True)
+    duration_min  = db.Column(db.Integer,  default=30, nullable=False)
+    reason        = db.Column(db.String(255), nullable=True)
+    status        = db.Column(db.String(20), default="scheduled", nullable=False)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.Index("ix_appointments_doctor_when",
+                 "doctor_id", "scheduled_for"),
+    )
+
+    def to_dict(self):
+        return {
+            "id":            self.id,
+            "doctor_id":     self.doctor_id,
+            "patient_id":    self.patient_id,
+            "scheduled_for": self.scheduled_for.isoformat() if self.scheduled_for else None,
+            "duration_min":  self.duration_min,
+            "reason":        self.reason,
+            "status":        self.status,
+            "created_at":    self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Prescription(db.Model):
+    __tablename__ = "prescriptions"
+    id            = db.Column(db.Integer,  primary_key=True)
+    doctor_id     = db.Column(db.Integer,  db.ForeignKey("doctors.id"),
+                              nullable=False, index=True)
+    patient_id    = db.Column(db.Integer,  db.ForeignKey("patients.id"),
+                              nullable=False, index=True)
+    drug_name     = db.Column(db.String(120), nullable=False)
+    dosage        = db.Column(db.String(60),  nullable=True)
+    frequency     = db.Column(db.String(60),  nullable=True)
+    duration      = db.Column(db.String(60),  nullable=True)
+    instructions  = db.Column(db.String(500), nullable=True)
+    prescribed_at = db.Column(db.DateTime, default=datetime.utcnow,
+                              nullable=False, index=True)
+    status        = db.Column(db.String(20), default="active", nullable=False)
+
+    __table_args__ = (
+        db.Index("ix_prescriptions_doctor_patient_time",
+                 "doctor_id", "patient_id", "prescribed_at"),
+    )
+
+    def to_dict(self):
+        return {
+            "id":            self.id,
+            "doctor_id":     self.doctor_id,
+            "patient_id":    self.patient_id,
+            "drug_name":     self.drug_name,
+            "dosage":        self.dosage,
+            "frequency":     self.frequency,
+            "duration":      self.duration,
+            "instructions":  self.instructions,
+            "prescribed_at": self.prescribed_at.isoformat() if self.prescribed_at else None,
+            "status":        self.status,
         }

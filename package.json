@@ -4,20 +4,20 @@
   "description": "e-Partogram — Enterprise Healthcare SaaS Platform (WHO Partograph Digital System)",
   "private": true,
   "workspaces": [
-    "services/frontend",
-    "services/admin-frontend"
+    "frontend",
+    "admin-frontend"
   ],
   "scripts": {
-    "dev:frontend": "cd services/frontend && npm run dev",
-    "dev:admin": "cd services/admin-frontend && npm run dev",
-    "build:frontend": "cd services/frontend && npm run build",
-    "build:admin": "cd services/admin-frontend && npm run build",
-    "lint:frontend": "cd services/frontend && npm run lint",
-    "lint:admin": "cd services/admin-frontend && npm run lint",
+    "dev:frontend": "cd doctor-frontend && npm run dev",
+    "dev:admin": "cd admin-frontend && npm run dev",
+    "build:frontend": "cd doctor-frontend && npm run build",
+    "build:admin": "cd admin-frontend && npm run build",
+    "lint:frontend": "cd doctor-frontend && npm run lint",
+    "lint:admin": "cd admin-frontend && npm run lint",
     "docker:up": "docker-compose up --build",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
-    "clean": "find . -name 'node_modules' -type d -not -path '*/.git/*' | xargs rm -rf"
+    "clean": "find . -name 'node_modules' -type d -not -path '*/.git/*' | xargs rm -rf && rm -rf dist && rm -rf .cache"
   },
   "engines": {
     "node": ">=20.0.0",
@@ -37,5 +37,8 @@
     "AI",
     "LSTM"
   ],
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "firebase": "^12.13.0"
+  }
 }
