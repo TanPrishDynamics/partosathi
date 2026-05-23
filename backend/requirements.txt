@@ -50,7 +50,7 @@ google-generativeai==0.8.5   # Gemini clinical summary (key via env only)
 # ── ML — all versions pinned for supply-chain safety ─────────────────────────
 torch>=2.4.0
 pandas>=2.2.2
-numpy>=1.26.4
+numpy>=2.4.6
 scikit-learn>=1.5.1
 # NOTE: tensorflow has been REMOVED (audit finding I-1) — it was listed in
 # the previous revision but never imported by any code path in backend/.
