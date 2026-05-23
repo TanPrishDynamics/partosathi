@@ -6,7 +6,7 @@
 #   - Health-check endpoint for orchestrators
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Create non-root user before any COPY/RUN
 RUN groupadd --system appuser && useradd --system --gid appuser --no-create-home appuser
