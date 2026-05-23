@@ -36,7 +36,7 @@ pydantic==2.8.2          # C-2: strict schema validation for LLM output
 pydantic-settings==2.3.4 # Startup env validation — fails fast on missing secrets
 
 # ── Logging ───────────────────────────────────────────────────────────────────
-python-json-logger==2.0.7  # Structured JSON logging (config/logger.py)
+python-json-logger==4.1.0  # Structured JSON logging (config/logger.py)
 
 # ── Response Compression ──────────────────────────────────────────────────────
 Flask-Compress==1.15     # gzip/br responses (auth/admin excluded — M-11)
