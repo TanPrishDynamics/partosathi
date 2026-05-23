@@ -4,9 +4,9 @@
 # Run `pip-audit -r requirements.txt` before upgrading any of these.
 
 # ── Core Web Framework ────────────────────────────────────────────────────────
-Flask==3.1.0
+Flask==3.1.3
 Flask-Cors==5.0.0
-Werkzeug==3.1.3
+Werkzeug==3.1.8
 gunicorn==22.0.0         # Production WSGI server (replaces dev Flask server)
 
 # ── Database ORM ──────────────────────────────────────────────────────────────
@@ -16,36 +16,36 @@ SQLAlchemy==2.0.49
 # psycopg2-binary==2.9.9   # PostgreSQL driver (production default per docker-compose)
 
 # ── Authentication & Security ─────────────────────────────────────────────────
-Flask-JWT-Extended==4.7.1
+Flask-JWT-Extended==4.7.4
 Flask-Limiter==4.1.1     # Rate limiting (brute-force + exfiltration protection)
 flask-talisman==1.1.0    # HTTP security headers (CSP, HSTS, X-Frame-Options)
 cryptography==44.0.2     # Fernet field-level encryption for PHI (Patient.name)
-google-auth==2.30.0      # Google OAuth
-requests==2.32.3         # Required by google-auth for transport
+google-auth==2.53.0      # Google OAuth
+requests==2.34.2         # Required by google-auth for transport
 pyotp==2.9.0             # M-7: TOTP MFA (RFC 6238 time-based codes)
 qrcode[pil]==7.4.2       # M-7: QR-code generation for TOTP enrollment URI
 redis==5.0.8             # M-8 + H-1: Flask-Limiter store + per-account lockout
 
 # ── Input Validation & Sanitization ──────────────────────────────────────────
 marshmallow==3.26.1      # Schema-based input validation and sanitization
-bleach==6.1.0            # HTML sanitization (middleware/sanitize.py)
+bleach==6.3.0            # HTML sanitization (middleware/sanitize.py)
 
 # ── Environment & Configuration ───────────────────────────────────────────────
-python-dotenv==1.1.0
-pydantic==2.8.2          # C-2: strict schema validation for LLM output
-pydantic-settings==2.3.4 # Startup env validation — fails fast on missing secrets
+python-dotenv==1.2.2
+pydantic==2.13.4          # C-2: strict schema validation for LLM output
+pydantic-settings==2.14.1 # Startup env validation — fails fast on missing secrets
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 python-json-logger==2.0.7  # Structured JSON logging (config/logger.py)
 
 # ── Response Compression ──────────────────────────────────────────────────────
-Flask-Compress==1.15     # gzip/br responses (auth/admin excluded — M-11)
+Flask-Compress==1.24     # gzip/br responses (auth/admin excluded — M-11)
 
 # ── Export ───────────────────────────────────────────────────────────────────
-reportlab==4.2.5         # PDF generation for partogram export
+reportlab==4.5.1         # PDF generation for partogram export
 
 # ── AI / LLM ─────────────────────────────────────────────────────────────────
-google-generativeai==0.8.5   # Gemini clinical summary (key via env only)
+google-generativeai==0.8.6   # Gemini clinical summary (key via env only)
 
 # ── ML — all versions pinned for supply-chain safety ─────────────────────────
 torch>=2.4.0
