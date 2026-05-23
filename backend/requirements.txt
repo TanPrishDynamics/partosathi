@@ -23,7 +23,7 @@ cryptography==44.0.2     # Fernet field-level encryption for PHI (Patient.name)
 google-auth==2.30.0      # Google OAuth
 requests==2.32.3         # Required by google-auth for transport
 pyotp==2.9.0             # M-7: TOTP MFA (RFC 6238 time-based codes)
-qrcode[pil]==7.4.2       # M-7: QR-code generation for TOTP enrollment URI
+qrcode[pil]==8.2       # M-7: QR-code generation for TOTP enrollment URI
 redis==5.0.8             # M-8 + H-1: Flask-Limiter store + per-account lockout
 
 # ── Input Validation & Sanitization ──────────────────────────────────────────
