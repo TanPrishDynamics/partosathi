@@ -1,169 +1,352 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { 
-  Plus, 
-  Search, 
-  ChevronRight, 
-  User, 
-  AlertCircle,
-  Activity,
-  Clock,
-  Filter,
-  Loader2
+import api from '../services/api';
+import {
+  Plus, Search, Activity, Clock, Edit2, Baby,
+  ShieldCheck, AlertCircle, AlertTriangle, Loader2,
+  ChevronRight, Users, Trash2, CheckCircle2,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
+import EditPatientModal from '../features/patients/EditPatientModal';
 import { formatDistanceToNow } from 'date-fns';
 
-const PatientList = () => {
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const navigate = useNavigate();
+/* ── Status config ────────────────────────────────────────────────────────── */
+const getStatus = p => {
+  if (p.alert_counts?.red > 0)    return 'critical';
+  if (p.alert_counts?.yellow > 0) return 'warning';
+  return 'normal';
+};
 
-  useEffect(() => {
-    const fetchPatients = async () => {
-      try {
-        const resp = await axios.get('/api/patients', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        setPatients(resp.data);
-      } catch (err) {
-        console.error(err);
-        if (err.response?.status === 401) navigate('/login');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchPatients();
-  }, [navigate]);
+const STATUS = {
+  critical: { color: '#DC2626', bg: '#FEF2F2',  border: '#FECACA',  label: 'CRITICAL', Icon: AlertCircle,   dot: '#DC2626' },
+  warning:  { color: '#D97706', bg: '#FFFBEB',  border: '#FDE68A',  label: 'ALERT',    Icon: AlertTriangle, dot: '#D97706' },
+  normal:   { color: '#16A34A', bg: '#F0FDF4',  border: '#BBF7D0',  label: 'NORMAL',   Icon: ShieldCheck,   dot: '#16A34A' },
+};
 
-  const filteredPatients = patients.filter(p => 
-    p.name.toLowerCase().includes(search.toLowerCase()) || 
-    p.patient_id.toLowerCase().includes(search.toLowerCase())
-  );
+/* ── Patient card ────────────────────────────────────────────────────────── */
+const PatientCard = ({ patient, index, onOpen, onEdit }) => {
+  const status = getStatus(patient);
+  const S      = STATUS[status];
+  const [hovered, setHovered] = useState(false);
+
+  const lastSeen = patient.last_observation_time
+    ? formatDistanceToNow(new Date(patient.last_observation_time), { addSuffix: true })
+    : 'No observations yet';
 
   return (
-    <div className="flex h-screen bg-[#0A0F1E]">
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: '#FFFFFF',
+        border: `1px solid ${hovered ? S.border : '#E5E7EB'}`,
+        borderTop: `3px solid ${S.dot}`,
+        borderRadius: '8px', padding: '16px',
+        boxShadow: hovered ? '0 4px 12px rgba(0,0,0,0.08)' : '0 1px 4px rgba(0,0,0,0.05)',
+        transition: 'all 0.15s ease',
+        cursor: 'pointer',
+      }}
+      onClick={() => onOpen(patient.patient_id)}
+    >
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Avatar */}
+          <div style={{
+            width: '38px', height: '38px', borderRadius: '8px', flexShrink: 0,
+            background: S.bg, border: `1px solid ${S.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '15px', fontWeight: 700, color: S.dot }}>
+              {patient.name?.charAt(0)?.toUpperCase() || '?'}
+            </span>
+          </div>
+          <div>
+            <h3 style={{ fontSize: '13.5px', fontWeight: 600, color: '#111827', margin: 0, lineHeight: 1.25 }}>
+              {patient.name}
+            </h3>
+            <p style={{ fontSize: '11px', color: '#9CA3AF', margin: '2px 0 0', fontFamily: 'DM Mono, monospace' }}>
+              ID: {patient.patient_id}
+            </p>
+          </div>
+        </div>
+
+        {/* Status badge */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '4px',
+          padding: '3px 8px', borderRadius: '4px',
+          background: S.bg, border: `1px solid ${S.border}`,
+        }}>
+          <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: S.dot }} />
+          <span style={{ fontSize: '9.5px', fontWeight: 700, color: S.color, letterSpacing: '0.06em' }}>
+            {S.label}
+          </span>
+        </div>
+      </div>
+
+      {/* Clinical data grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '7px', marginBottom: '12px' }}>
+        {[
+          { label: 'Age',  value: `${patient.age}y` },
+          { label: 'GA',   value: `${patient.gestational_age}w` },
+          { label: 'G/P',  value: `G${patient.gravida}P${patient.parity}` },
+        ].map(({ label, value }) => (
+          <div key={label} style={{ padding: '6px 8px', borderRadius: '5px', background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+            <p style={{ fontSize: '9px', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px', fontWeight: 600 }}>{label}</p>
+            <p style={{ fontSize: '12.5px', fontWeight: 600, color: '#111827' }}>{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #F3F4F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <Clock style={{ width: '10px', height: '10px', color: '#9CA3AF' }} />
+          <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{lastSeen}</span>
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }} onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => onEdit(patient)}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 9px', borderRadius: '5px', background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+          >
+            <Edit2 style={{ width: '10px', height: '10px' }} /> Edit
+          </button>
+          <button
+            onClick={() => onOpen(patient.patient_id)}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 9px', borderRadius: '5px', background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#2563EB', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Open <ChevronRight style={{ width: '10px', height: '10px' }} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ─── Page ──────────────────────────────────────────────────────────────── */
+const PatientList = () => {
+  const [patients, setPatients]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [search, setSearch]         = useState('');
+  const [filter, setFilter]         = useState('all');
+  const [editingPatient, setEditing] = useState(null);
+  const [page, setPage]             = useState(1);
+  const navigate = useNavigate();
+
+  const PER_PAGE = 12;
+
+  useEffect(() => {
+    setLoading(true);
+    api.get('/api/patients')
+      .then(r => setPatients(r.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = patients.filter(p => {
+    const matchSearch = !search || p.name?.toLowerCase().includes(search.toLowerCase()) || String(p.patient_id).includes(search);
+    const status = getStatus(p);
+    const matchFilter = filter === 'all' || status === filter;
+    return matchSearch && matchFilter;
+  });
+
+  const paginated = filtered.slice(0, page * PER_PAGE);
+  const hasMore   = paginated.length < filtered.length;
+
+  const critical = patients.filter(p => getStatus(p) === 'critical').length;
+  const warnings = patients.filter(p => getStatus(p) === 'warning').length;
+  const active   = patients.filter(p => (p.status || 'Active') === 'Active').length;
+
+  const handleSaveEdit = (updated) => {
+    setPatients(prev => prev.map(p => p.patient_id === updated.patient_id ? { ...p, ...updated } : p));
+    setEditing(null);
+  };
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
-      
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-7xl mx-auto">
-          
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
-            <div>
-              <h1 className="text-3xl font-bold font-serif mb-2">Patients</h1>
-              <p className="text-slate-400">Monitoring {patients.length} active labor cases</p>
+
+      <main style={{ flex: 1, overflowY: 'auto', background: '#F5F7FA', fontFamily: 'Inter, system-ui, sans-serif' }}>
+
+        {/* ── Sticky header ────────────────────────────────── */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 40,
+          background: '#FFFFFF',
+          borderBottom: '1px solid #E5E7EB',
+          padding: '14px 36px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            {/* Title + counters */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h1 style={{ fontSize: '16px', fontWeight: 700, color: '#111827', letterSpacing: '-0.01em', textTransform: 'uppercase' }}>
+                Patients
+              </h1>
+              <div style={{ display: 'flex', gap: '5px' }}>
+                {[
+                  { label: `${active} Active`,    color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+                  { label: `${warnings} Alert`,   color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+                  { label: `${critical} Critical`, color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
+                ].map(({ label, color, bg, border }) => (
+                  <span key={label} style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, background: bg, color, border: `1px solid ${border}` }}>
+                    {label}
+                  </span>
+                ))}
+              </div>
             </div>
-            
-            <button 
+
+            {/* Admit button */}
+            <button
               onClick={() => navigate('/new-patient')}
-              className="glass-button flex items-center justify-center space-x-2"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '8px 16px', borderRadius: '6px', cursor: 'pointer',
+                background: '#2563EB', border: '1px solid #1D4ED8',
+                color: '#fff', fontSize: '13px', fontWeight: 600,
+                boxShadow: '0 1px 4px rgba(37,99,235,0.20)',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseOver={e => e.currentTarget.style.background = '#1D4ED8'}
+              onMouseOut={e => e.currentTarget.style.background = '#2563EB'}
             >
-              <Plus className="w-5 h-5" />
-              <span className="font-bold">Register New Patient</span>
+              <Plus style={{ width: '14px', height: '14px' }} />
+              Admit Patient
             </button>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-4 mb-8">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-              <input 
-                type="text"
-                placeholder="Search by Name or Patient ID..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all"
+          {/* Search + filter row */}
+          <div style={{ display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
+            {/* Search */}
+            <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+              <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '14px', height: '14px', color: '#9CA3AF', pointerEvents: 'none' }} />
+              <input
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search name or ID…"
+                style={{
+                  width: '100%', paddingLeft: '36px', paddingRight: '12px', height: '36px',
+                  fontSize: '13px', border: '1px solid #D1D5DB', borderRadius: '6px',
+                  background: '#F9FAFB', color: '#111827', outline: 'none', boxSizing: 'border-box',
+                }}
+                onFocus={e => { e.target.style.borderColor = '#2563EB'; e.target.style.boxShadow = '0 0 0 3px rgba(37,99,235,0.10)'; }}
+                onBlur={e => { e.target.style.borderColor = '#D1D5DB'; e.target.style.boxShadow = 'none'; }}
               />
             </div>
-            <button className="px-6 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-slate-400 hover:text-white flex items-center space-x-2 transition-all cursor-pointer">
-              <Filter className="w-4 h-4" />
-              <span className="font-medium">Filter</span>
-            </button>
-          </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-[#00C9A7] animate-spin" />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredPatients.map(p => (
-                <div 
-                  key={p.id}
-                  onClick={() => navigate(`/dashboard/${p.patient_id}`)}
-                  className="glass-card p-6 cursor-pointer group hover:border-[#00C9A7]/40 transition-all duration-300 relative overflow-hidden"
+            {/* Filter pills */}
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              {[
+                { id: 'all',      label: 'All',      activeColor: '#2563EB', activeBg: '#EFF6FF', activeBorder: '#BFDBFE' },
+                { id: 'normal',   label: 'Normal',   activeColor: '#16A34A', activeBg: '#F0FDF4', activeBorder: '#BBF7D0' },
+                { id: 'warning',  label: 'Alert',    activeColor: '#D97706', activeBg: '#FFFBEB', activeBorder: '#FDE68A' },
+                { id: 'critical', label: 'Critical', activeColor: '#DC2626', activeBg: '#FEF2F2', activeBorder: '#FECACA' },
+              ].map(({ id, label, activeColor, activeBg, activeBorder }) => (
+                <button
+                  key={id}
+                  onClick={() => setFilter(id)}
+                  style={{
+                    padding: '5px 11px', borderRadius: '5px', fontSize: '11.5px',
+                    fontWeight: 600, cursor: 'pointer',
+                    background: filter === id ? activeBg : '#F9FAFB',
+                    border: `1px solid ${filter === id ? activeBorder : '#E5E7EB'}`,
+                    color: filter === id ? activeColor : '#6B7280',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
-                  <div className="absolute top-0 right-0 w-32 h-32 gradient-teal opacity-5 blur-2xl -mr-16 -mt-16 group-hover:opacity-10 transition-opacity"></div>
-                  
-                  <div className="flex items-start justify-between mb-6 relative z-10">
-                    <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:border-[#00C9A7]/20 group-hover:bg-[#00C9A7]/5 transition-all">
-                      <User className="w-6 h-6 text-slate-400 group-hover:text-[#00C9A7]" />
-                    </div>
-                    {(p.alert_counts?.red > 0 || p.alert_counts?.yellow > 0) && (
-                      <div className="flex space-x-1">
-                        {p.alert_counts.red > 0 && (
-                          <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
-                        )}
-                        {p.alert_counts.yellow > 0 && (
-                          <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-bold text-lg font-serif group-hover:text-[#00C9A7] transition-colors">{p.name}</h3>
-                      <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-[#00C9A7] group-hover:translate-x-1 transition-all" />
-                    </div>
-                    <p className="text-xs text-[#00C9A7] font-bold tracking-widest mb-4 opacity-70 uppercase">{p.patient_id}</p>
-                    
-                    <div className="space-y-3 pt-4 border-t border-white/5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500 flex items-center space-x-1.5">
-                          <Activity className="w-3.5 h-3.5" />
-                          <span>Observations</span>
-                        </span>
-                        <span className="font-bold text-slate-300">{p.observation_count} total</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500 flex items-center space-x-1.5">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Admission</span>
-                        </span>
-                        <span className="text-slate-400">{formatDistanceToNow(new Date(p.admission_time), { addSuffix: true })}</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 flex items-center space-x-4">
-                      {p.alert_counts.red > 0 && (
-                        <div className="flex items-center space-x-1 text-red-500 text-[10px] font-bold uppercase tracking-tighter">
-                          <AlertCircle className="w-3 h-3" />
-                          <span>{p.alert_counts.red} Critical</span>
-                        </div>
-                      )}
-                      <div className="text-[10px] font-bold uppercase text-slate-600 ml-auto">
-                        G{p.gravida} P{p.parity} • {p.gestational_age}w
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  {label}
+                </button>
               ))}
+            </div>
+          </div>
+        </div>
 
-              {filteredPatients.length === 0 && (
-                <div className="col-span-full py-20 text-center glass-card border-dashed">
-                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Search className="w-8 h-8 text-slate-600" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-2">No patients found</h3>
-                  <p className="text-slate-500">Try searching for a different name or ID</p>
-                </div>
+        <div style={{ padding: '24px 36px 80px' }}>
+
+          {/* Results count */}
+          {!loading && (
+            <p style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '16px', fontFamily: 'DM Mono, monospace' }}>
+              {filtered.length} patient{filtered.length !== 1 ? 's' : ''} {search ? `matching "${search}"` : filter !== 'all' ? `with ${filter} status` : 'total'} — showing {Math.min(paginated.length, filtered.length)}
+            </p>
+          )}
+
+          {/* Loading */}
+          {loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', gap: '14px' }}>
+              <div style={{ width: '36px', height: '36px', border: '2.5px solid #E5E7EB', borderTopColor: '#2563EB', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <p style={{ fontSize: '13px', color: '#9CA3AF' }}>Fetching patients…</p>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!loading && filtered.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '64px 20px' }}>
+              <div style={{ width: '52px', height: '52px', borderRadius: '10px', background: '#EFF6FF', border: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                <Users style={{ width: '24px', height: '24px', color: '#2563EB' }} />
+              </div>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#6B7280', marginBottom: '8px' }}>
+                {search ? 'No patients found' : 'No patients admitted'}
+              </h3>
+              <p style={{ fontSize: '13px', color: '#9CA3AF', marginBottom: '18px' }}>
+                {search ? `Try a different search term` : 'Begin by admitting your first patient'}
+              </p>
+              {!search && (
+                <button
+                  onClick={() => navigate('/new-patient')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 18px', borderRadius: '6px', background: '#2563EB', border: '1px solid #1D4ED8', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  <Plus style={{ width: '14px', height: '14px' }} /> Admit Patient
+                </button>
               )}
             </div>
           )}
+
+          {/* Patient grid */}
+          {!loading && filtered.length > 0 && (
+            <>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
+                gap: '12px',
+              }}>
+                {paginated.map((p, i) => (
+                  <PatientCard
+                    key={p.patient_id}
+                    patient={p}
+                    index={i}
+                    onOpen={(id) => navigate(`/dashboard/${id}`)}
+                    onEdit={setEditing}
+                  />
+                ))}
+              </div>
+
+              {/* Load more */}
+              {hasMore && (
+                <div style={{ textAlign: 'center', marginTop: '24px' }}>
+                  <button
+                    onClick={() => setPage(p => p + 1)}
+                    style={{
+                      padding: '9px 24px', borderRadius: '6px', cursor: 'pointer',
+                      background: '#EFF6FF', border: '1px solid #BFDBFE',
+                      color: '#2563EB', fontSize: '13px', fontWeight: 600,
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    Load {Math.min(PER_PAGE, filtered.length - paginated.length)} more →
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </main>
+
+      {/* Edit modal */}
+      {editingPatient && (
+        <EditPatientModal
+          patient={editingPatient}
+          onClose={() => setEditing(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
     </div>
   );
 };

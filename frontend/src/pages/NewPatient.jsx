@@ -1,156 +1,311 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { 
-  ArrowLeft, 
-  UserPlus, 
-  Save, 
-  Calendar, 
-  User, 
-  Activity,
-  ChevronRight,
-  Info
+import { motion } from 'framer-motion';
+import api from '../services/api';
+import {
+  ArrowLeft, UserPlus, ChevronRight, Loader2,
+  User, Calendar, Baby, Heart, Info,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
+import PatientQuotaMeter from '../components/PatientQuotaMeter';
 
+/* ─── Field wrapper ──────────────────────────────────────────────────────── */
+const Field = ({ label, icon: Icon, span = 1, children }) => (
+  <div style={{ gridColumn: span === 2 ? '1 / -1' : undefined }}>
+    <label style={{
+      display: 'block', fontSize: '10px', fontWeight: 700,
+      textTransform: 'uppercase', letterSpacing: '0.12em',
+      color: '#64748B', marginBottom: '7px',
+      fontFamily: 'DM Sans, sans-serif',
+    }}>
+      {label}
+    </label>
+    <div style={{ position: 'relative' }}>
+      {Icon && (
+        <Icon style={{
+          position: 'absolute', left: '14px', top: '50%',
+          transform: 'translateY(-50%)', width: '16px', height: '16px',
+          color: '#94A3B8', pointerEvents: 'none', zIndex: 1,
+        }} />
+      )}
+      {children}
+    </div>
+  </div>
+);
+
+const inp = (hasIcon = false) => ({
+  width: '100%',
+  paddingLeft: hasIcon ? '42px' : '16px',
+  paddingRight: '16px',
+  paddingTop: '12px',
+  paddingBottom: '12px',
+  background: '#F8FAFC',
+  border: '1px solid #E2E8F0',
+  borderRadius: '10px',
+  fontSize: '14px',
+  fontFamily: 'Inter, sans-serif',
+  color: '#1E293B',
+  outline: 'none',
+  transition: 'all 0.2s ease',
+  boxSizing: 'border-box',
+});
+
+const onFocus = e => {
+  e.target.style.borderColor = '#2563EB';
+  e.target.style.boxShadow   = '0 0 0 3px rgba(37,99,235,0.10)';
+  e.target.style.background  = '#fff';
+};
+const onBlur = e => {
+  e.target.style.borderColor = '#D1D5DB';
+  e.target.style.boxShadow   = 'none';
+  e.target.style.background  = '#F9FAFB';
+};
+
+/* ─── Section header ─────────────────────────────────────────────────────── */
+const SectionHeader = ({ icon: Icon, label, color }) => (
+  <div style={{
+    gridColumn: '1 / -1',
+    display: 'flex', alignItems: 'center', gap: '9px',
+    marginBottom: '4px', paddingBottom: '12px',
+    borderBottom: `1px solid #E5E7EB`,
+  }}>
+    <Icon style={{ width: '14px', height: '14px', color, flexShrink: 0 }} />
+    <span style={{
+      fontSize: '10px', fontWeight: 700, color,
+      textTransform: 'uppercase', letterSpacing: '0.10em',
+      fontFamily: 'Inter, system-ui, sans-serif',
+    }}>
+      {label}
+    </span>
+  </div>
+);
+
+/* ─── Page ───────────────────────────────────────────────────────────────── */
 const NewPatient = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     age: '',
     gravida: 1,
     parity: 0,
     gestational_age: '',
-    admission_time: new Date().toISOString().slice(0, 16)
+    admission_time: new Date().toISOString().slice(0, 16),
+    membrane_rupture_time: '',
   });
 
-  const handleChange = (e) => {
+  const handleChange = e => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
     setLoading(true);
+    setSubmitError(null);
     try {
-      const authHeader = { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } };
-      const resp = await axios.post('/api/patient', formData, authHeader);
+      const resp = await api.post('/api/patient', formData);
       navigate(`/dashboard/${resp.data.patient_id}`);
     } catch (err) {
-      console.error(err);
-      alert('Error registering patient');
+      const data = err.response?.data;
+      if (data?.quota_reached) {
+        setSubmitError({ type: 'quota', message: data.detail || 'Patient quota reached. Contact your administrator to increase your limit.' });
+      } else {
+        setSubmitError({ type: 'error', message: data?.error || 'Error registering patient. Please try again.' });
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex h-screen bg-[#0A0F1E]">
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
-      
-      <main className="flex-1 overflow-y-auto p-8 relative">
-        <div className="max-w-3xl mx-auto">
-          
-          <button 
+
+      <main style={{
+        flex: 1, overflowY: 'auto',
+        background: '#F8FAFC',
+        fontFamily: 'Inter, sans-serif',
+      }}>
+        <div style={{ maxWidth: '720px', margin: '0 auto', padding: '40px 32px 80px' }}>
+
+          {/* Back button */}
+          <motion.button
+            whileHover={{ x: -2 }} whileTap={{ scale: 0.97 }}
             onClick={() => navigate('/patients')}
-            className="flex items-center space-x-2 text-slate-400 hover:text-white mb-8 transition-colors group cursor-pointer"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '7px',
+              padding: '8px 16px', borderRadius: '10px', marginBottom: '32px',
+              border: '1px solid #E2E8F0',
+              background: '#fff', color: '#64748B',
+              fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+              fontFamily: 'Inter, sans-serif',
+            }}
           >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span>Back to Patients</span>
-          </button>
+            <ArrowLeft style={{ width: '14px', height: '14px' }} />
+            Back to Patients
+          </motion.button>
 
-          <div className="mb-10">
-            <h1 className="text-3xl font-bold font-serif mb-2">New Admission</h1>
-            <p className="text-slate-400">Enter patient details to initialize the digital partograph</p>
-          </div>
+          {/* Page header */}
+          <motion.div
+            initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.45 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: '32px' }}
+          >
+            <div style={{
+              width: '52px', height: '52px', borderRadius: '12px', flexShrink: 0,
+              background: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <UserPlus style={{ width: '24px', height: '24px', color: '#2563EB' }} />
+            </div>
+            <div>
+              <h1 style={{
+                fontFamily: 'Inter, sans-serif', fontSize: '22px', fontWeight: 700,
+                color: '#1E293B', margin: 0, letterSpacing: '-0.01em',
+              }}>
+                New Admission
+              </h1>
+              <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', fontFamily: 'DM Sans, sans-serif' }}>
+                Initialize digital partograph for a new patient
+              </p>
+            </div>
+          </motion.div>
 
-          <div className="glass-card p-10 bg-white/5 border-white/10 relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-64 h-64 gradient-teal opacity-5 blur-3xl -mr-32 -mt-32"></div>
+          {/* Quota meter */}
+          <PatientQuotaMeter />
 
-             <form onSubmit={handleSubmit} className="relative z-10 space-y-8">
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="col-span-1 md:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Full Name</label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00C9A7]" />
-                      <input 
-                        type="text" name="name" value={formData.name} onChange={handleChange} required
-                        className="w-full bg-black/20 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                        placeholder="E.g. Jane Doe"
-                      />
-                    </div>
-                  </div>
+          {/* Error banner */}
+          {submitError && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+              style={{
+                padding: '14px 18px', borderRadius: '12px', marginBottom: '20px',
+                background: 'rgba(255,45,85,0.07)',
+                border: '1px solid rgba(255,45,85,0.25)',
+                color: '#ff2d55', fontSize: '13px', fontFamily: 'DM Sans, sans-serif',
+                display: 'flex', alignItems: 'flex-start', gap: '10px',
+              }}
+            >
+              <span style={{ flexShrink: 0, fontWeight: 700 }}>
+                {submitError.type === 'quota' ? '⚠ Quota Reached' : '✕ Error'}
+              </span>
+              <span>{submitError.message}</span>
+            </motion.div>
+          )}
 
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Age (Years)</label>
-                    <input 
-                      type="number" name="age" value={formData.age} onChange={handleChange} required
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                      placeholder="28"
-                    />
-                  </div>
+          {/* Form card */}
+          <motion.div
+            initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.45, delay: 0.08 }}
+            style={{
+              background: '#fff',
+              border: '1px solid #E2E8F0',
+              borderRadius: '20px', padding: '36px',
+              boxShadow: '0 4px 24px rgba(15,23,42,0.07)',
+            }}
+          >
+            {/* Top accent line */}
+            <div style={{
+              height: '3px',
+              background: '#2563EB',
+              marginBottom: '32px', marginLeft: '-36px', marginRight: '-36px',
+              marginTop: '-36px', borderRadius: '20px 20px 0 0',
+            }} />
 
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Gestational Age (Weeks)</label>
-                    <input 
-                      type="number" name="gestational_age" value={formData.gestational_age} onChange={handleChange} required
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                      placeholder="39"
-                    />
-                  </div>
+            <form onSubmit={handleSubmit}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '22px' }}>
 
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Gravida</label>
-                    <input 
-                      type="number" name="gravida" value={formData.gravida} onChange={handleChange} required
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                    />
-                  </div>
+                {/* Section: Patient Identity */}
+                <SectionHeader icon={User} label="Patient Identity" color="#2563EB" />
 
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Parity</label>
-                    <input 
-                      type="number" name="parity" value={formData.parity} onChange={handleChange} required
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                    />
-                  </div>
+                <Field label="Full Name" icon={User} span={2}>
+                  <input type="text" name="name" value={formData.name} onChange={handleChange} required
+                    placeholder="e.g. Jane Doe" style={inp(true)} onFocus={onFocus} onBlur={onBlur} />
+                </Field>
 
-                  <div className="col-span-1 md:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Admission Timestamp</label>
-                    <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00C9A7]" />
-                      <input 
-                        type="datetime-local" name="admission_time" value={formData.admission_time} onChange={handleChange} required
-                        className="w-full bg-black/20 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 focus:border-[#00C9A7] outline-none transition-all font-medium"
-                      />
-                    </div>
-                  </div>
+                <Field label="Age (Years)">
+                  <input type="number" name="age" value={formData.age} onChange={handleChange} required
+                    placeholder="28" min={10} max={60} style={inp()} onFocus={onFocus} onBlur={onBlur} />
+                </Field>
+
+                <Field label="Gestational Age (Weeks)" icon={Baby}>
+                  <input type="number" name="gestational_age" value={formData.gestational_age} onChange={handleChange} required
+                    placeholder="39" min={20} max={45} style={inp(true)} onFocus={onFocus} onBlur={onBlur} />
+                </Field>
+
+                {/* Section: Obstetric History */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+                  <SectionHeader icon={Heart} label="Obstetric History" color="#DC2626" />
                 </div>
 
-                <div className="p-4 bg-teal-500/5 border border-teal-500/10 rounded-2xl flex items-start space-x-3">
-                   <Info className="w-5 h-5 text-[#00C9A7] mt-0.5" />
-                   <p className="text-xs text-slate-400 leading-relaxed">
-                     Initializing a new patient profile will set the baseline for labor monitoring. 
-                     The partograph will automatically start tracking progress from the first observation recorded ≥ 4cm dilation.
-                   </p>
+                <Field label="Gravida">
+                  <input type="number" name="gravida" value={formData.gravida} onChange={handleChange} required
+                    min={1} style={inp()} onFocus={onFocus} onBlur={onBlur} />
+                </Field>
+
+                <Field label="Parity">
+                  <input type="number" name="parity" value={formData.parity} onChange={handleChange} required
+                    min={0} style={inp()} onFocus={onFocus} onBlur={onBlur} />
+                </Field>
+
+                {/* Section: Admission Details */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+                  <SectionHeader icon={Calendar} label="Admission Details" color="#2563EB" />
                 </div>
 
-                <div className="pt-6 flex justify-end">
-                   <button 
-                    type="submit" 
-                    disabled={loading}
-                    className="glass-button w-full sm:w-auto px-10 py-4 flex items-center justify-center space-x-2"
-                   >
-                     <UserPlus className="w-5 h-5" />
-                     <span className="text-lg">Register & Start Partograph</span>
-                     {loading ? <Loader2 className="w-5 h-5 animate-spin ml-2" /> : <ChevronRight className="w-5 h-5" />}
-                   </button>
-                </div>
+                <Field label="Admission Timestamp" icon={Calendar} span={2}>
+                  <input type="datetime-local" name="admission_time" value={formData.admission_time} onChange={handleChange} required
+                    style={inp(true)} onFocus={onFocus} onBlur={onBlur} />
+                </Field>
 
-             </form>
-          </div>
+                <Field label="Membrane Rupture Time (Optional)" icon={Calendar} span={2}>
+                  <input type="datetime-local" name="membrane_rupture_time" value={formData.membrane_rupture_time} onChange={handleChange}
+                    style={inp(true)} onFocus={onFocus} onBlur={onBlur} />
+                </Field>
+              </div>
+
+              {/* Info banner */}
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: '12px',
+                padding: '14px 18px', borderRadius: '8px', marginTop: '24px',
+                background: '#EFF6FF', border: '1px solid #BFDBFE',
+              }}>
+                <Info style={{ width: '15px', height: '15px', color: '#2563EB', flexShrink: 0, marginTop: '2px' }} />
+                <p style={{
+                  fontSize: '13px', color: '#475569', lineHeight: 1.65, margin: 0,
+                  fontFamily: 'Inter, sans-serif',
+                }}>
+                  Initializing a new patient profile sets the baseline for labor monitoring.
+                  The partograph automatically tracks progress from the first observation recorded at ≥ 4 cm dilation.
+                </p>
+              </div>
+
+              {/* Submit button */}
+              <motion.button
+                type="submit" disabled={loading}
+                whileHover={!loading ? { scale: 1.01 } : {}}
+                whileTap={!loading ? { scale: 0.98 } : {}}
+                style={{
+                  marginTop: '24px', width: '100%', padding: '14px 28px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                  background: loading ? '#94A3B8' : '#2563EB',
+                  color: '#fff',
+                  fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 700, fontSize: '14px',
+                  borderRadius: '8px', border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  boxShadow: loading ? 'none' : '0 2px 8px rgba(37,99,235,0.25)',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {loading ? (
+                  <><Loader2 style={{ width: '18px', height: '18px', animation: 'spin 1s linear infinite' }} /> Registering…</>
+                ) : (
+                  <><UserPlus style={{ width: '18px', height: '18px' }} /> Register &amp; Start Partograph <ChevronRight style={{ width: '18px', height: '18px' }} /></>
+                )}
+              </motion.button>
+            </form>
+          </motion.div>
         </div>
       </main>
     </div>

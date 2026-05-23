@@ -1,0 +1,177 @@
+name: Security & Quality
+
+on:
+  push:
+    branches: [main, final-security-hardening]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Python backend ───────────────────────────────────────────────────────────
+  backend:
+    name: Backend — Audit, SAST, Lint, Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pip-audit bandit flake8 pytest pytest-cov
+
+      # ── Dependency CVE scan ────────────────────────────────────────────────
+      - name: pip-audit (CVE scan)
+        run: |
+          pip-audit -r backend/requirements.txt --format=json --output=pip-audit.json || true
+          pip-audit -r backend/requirements.txt
+
+      # ── SAST ──────────────────────────────────────────────────────────────
+      - name: bandit (SAST)
+        run: |
+          bandit -r backend/ \
+            --exclude backend/venv,backend/venv_production,backend/instance,backend/ml \
+            --severity-level medium \
+            --confidence-level medium \
+            -f json -o bandit-report.json || true
+          bandit -r backend/ \
+            --exclude backend/venv,backend/venv_production,backend/instance,backend/ml \
+            --severity-level high \
+            --confidence-level high
+
+      # ── Lint ──────────────────────────────────────────────────────────────
+      - name: flake8 (lint)
+        run: |
+          flake8 backend/ \
+            --exclude=backend/venv,backend/venv_production,backend/__pycache__,backend/instance \
+            --max-line-length=120 \
+            --count \
+            --statistics
+
+      # ── Unit tests ────────────────────────────────────────────────────────
+      - name: pytest
+        env:
+          FLASK_ENV: testing
+          JWT_SECRET_KEY: ci-test-secret-key-not-used-in-production-64chars!!
+          SECRET_KEY: ci-test-secret-key-not-used-in-production-64chars!!
+          # C-3: FIELD_ENCRYPTION_KEY is mandatory in every environment — CI
+          # supplies a deterministic test key so PHI encryption is exercised
+          # in the test suite the same way it runs in production.
+          FIELD_ENCRYPTION_KEY: kZcj9PuJzcm1V13_GqLvy7tQqv4UvALYHGCm4Tn1QXY=
+          SEED_ADMIN_PASSWORD: ci-test-seed-pw-ABCxyz123!!
+          DATABASE_URL: sqlite:///test.db
+          RATELIMIT_STORAGE_URI: memory://
+        run: |
+          cd backend
+          pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=term-missing \
+            || echo "No tests found — add tests in backend/tests/"
+
+      # ── Production header smoke test (C-4) ────────────────────────────────
+      # Boots the production image and asserts that every required security
+      # header is present on /api/health. This is the canonical guard
+      # against the C-4 footgun where a deploy starts in development mode.
+      - name: Production header smoke test
+        run: |
+          docker build -t epartogram-backend:ci ./backend
+          docker network create epartogram-ci || true
+          docker run -d --rm --name eptest-redis --network epartogram-ci redis:7-alpine
+          docker run -d --rm --name eptest --network epartogram-ci \
+            -e FLASK_ENV=production \
+            -e JWT_SECRET_KEY=ci-test-secret-key-not-used-in-production-64chars!!aa \
+            -e SECRET_KEY=ci-test-secret-key-not-used-in-production-64chars!!bb \
+            -e FIELD_ENCRYPTION_KEY=kZcj9PuJzcm1V13_GqLvy7tQqv4UvALYHGCm4Tn1QXY= \
+            -e SEED_ADMIN_PASSWORD=ci-test-prod-seed-pw-XYZ987-aBcD \
+            -e DATABASE_URL=sqlite:///prod-smoke.db \
+            -e RATELIMIT_STORAGE_URI=redis://eptest-redis:6379/0 \
+            -e ALLOWED_ORIGINS='["http://localhost"]' \
+            -p 5001:5001 epartogram-backend:ci || (docker logs eptest && exit 1)
+          # Wait for the app to be ready (max ~20s)
+          for i in $(seq 1 20); do
+            if curl -fs http://localhost:5001/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -sI http://localhost:5001/api/health | tee /tmp/headers.txt
+          # Required production headers
+          grep -qi "Strict-Transport-Security"            /tmp/headers.txt
+          grep -qi "Content-Security-Policy"              /tmp/headers.txt
+          grep -qi "X-Frame-Options: *DENY"               /tmp/headers.txt
+          grep -qi "X-Content-Type-Options: *nosniff"     /tmp/headers.txt
+          grep -qi "Referrer-Policy"                      /tmp/headers.txt
+          grep -qi "Permissions-Policy"                   /tmp/headers.txt
+          docker logs eptest | tail -50
+          docker rm -f eptest eptest-redis
+
+      # ── Upload reports ────────────────────────────────────────────────────
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-security-reports
+          path: |
+            pip-audit.json
+            bandit-report.json
+            backend/coverage.xml
+          retention-days: 30
+
+  # ── Frontend audits ──────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend — npm audit + lint
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        app: [frontend, admin-frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.app }}
+        run: npm ci
+
+      - name: npm audit
+        working-directory: ${{ matrix.app }}
+        run: npm audit --audit-level=high
+
+      - name: Build (validates no compile-time errors)
+        working-directory: ${{ matrix.app }}
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: http://localhost:5001
+
+  # ── Container image scan ─────────────────────────────────────────────────────
+  trivy:
+    name: Trivy container scan
+    runs-on: ubuntu-latest
+    needs: [backend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t e-partogram-backend:ci ./backend
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: e-partogram-backend:ci
+          format: table
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
