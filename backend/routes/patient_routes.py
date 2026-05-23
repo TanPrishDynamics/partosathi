@@ -3,9 +3,16 @@ routes/patient_routes.py — Patient CRUD blueprint.
 
 All routes enforce:
   - JWT authentication
-  - IDOR protection via get_patient_for_doctor()
+  - IDOR protection via get_patient_for_doctor() (fail-closed, no NULL bypass)
   - Schema validation via PatientSchema
   - GDPR: consent_obtained required before PHI storage
+
+Multi-tenant isolation fix (v2):
+  - GET /api/patients now filters STRICTLY by doctor_id == doc_id.
+    The previous query included `OR doctor_id IS NULL` which exposed all
+    orphaned/legacy patients to every doctor. This has been removed.
+  - Ownership helpers are now fail-closed: NULL doctor_id → 403.
+  - DELETE /api/patient/<id> added with ownership check.
 """
 from datetime import datetime, timezone
 
@@ -16,6 +23,11 @@ from extensions import db, limiter
 from extensions import _jwt_or_ip_key
 from models import Alert, Doctor, Observation, Patient
 from utils.crypto import get_patient_for_doctor
+from utils.repository import (
+    get_doctor_patients,
+    create_doctor_patient,
+    delete_doctor_patient,
+)
 from validators import PatientSchema, validate_request
 from alerts import evaluate_observation
 from email_service import send_quota_warning_email
@@ -31,61 +43,85 @@ patient_bp = Blueprint("patient", __name__)
 def list_patients():
     """
     GET /api/patients
-    Supports optional pagination: ?page=N&limit=M
-    Returns a flat array without ?page (backward-compat) or a paginated envelope.
+    Supports optional pagination: ?page=N&limit=M&status=Active|Completed|Inactive
+
+    SECURITY FIX: This query now filters STRICTLY by the authenticated
+    doctor's ID. The previous implementation included:
+        db.or_(Patient.doctor_id == None, Patient.doctor_id == doc_id)
+    which exposed ALL patients with a null doctor_id to every doctor.
+    The fix removes the OR clause entirely — null doctor_id patients are
+    inaccessible to doctors (fail-closed) and only visible to admins.
     """
-    page_param = request.args.get("page", type=int)
-    limit      = min(int(request.args.get("limit", 50)), 200)
+    page_param     = request.args.get("page", type=int)
+    limit          = min(int(request.args.get("limit", 50)), 200)
+    status_filter  = request.args.get("status")
 
     doc_id   = int(get_jwt_identity())
     is_admin = get_jwt().get("role") == "admin"
 
     if is_admin:
+        # Admin sees all patients across all doctors.
         base_query = Patient.query.order_by(Patient.admission_time.desc())
-    else:
-        base_query = Patient.query.filter(
-            db.or_(Patient.doctor_id == None, Patient.doctor_id == doc_id)
-        ).order_by(Patient.admission_time.desc())
+        if status_filter and status_filter != "all":
+            base_query = base_query.filter(Patient.status == status_filter)
 
-    def _enrich_batch(patients):
-        if not patients:
-            return []
-        pids      = [p.id for p in patients]
-        all_alerts = Alert.query.filter(Alert.patient_id.in_(pids)).all()
-        alert_map  = {}
-        for a in all_alerts:
-            alert_map.setdefault(a.patient_id, []).append(a)
-        obs_counts = dict(
-            db.session.query(Observation.patient_id, db.func.count(Observation.id))
-            .filter(Observation.patient_id.in_(pids))
-            .group_by(Observation.patient_id).all()
-        )
-        result = []
-        for p in patients:
-            d = p.to_dict()
-            alerts = alert_map.get(p.id, [])
-            d["alert_counts"] = {
-                "red":    sum(1 for a in alerts if a.severity == "red"    and not a.acknowledged),
-                "yellow": sum(1 for a in alerts if a.severity == "yellow" and not a.acknowledged),
-            }
-            d["observation_count"] = obs_counts.get(p.id, 0)
-            result.append(d)
-        return result
+        def _enrich_batch(patients):
+            if not patients:
+                return []
+            pids = [p.id for p in patients]
+            all_alerts = Alert.query.filter(Alert.patient_id.in_(pids)).all()
+            alert_map = {}
+            for a in all_alerts:
+                alert_map.setdefault(a.patient_id, []).append(a)
+            obs_counts = dict(
+                db.session.query(Observation.patient_id, db.func.count(Observation.id))
+                .filter(Observation.patient_id.in_(pids))
+                .group_by(Observation.patient_id).all()
+            )
+            result = []
+            for p in patients:
+                d = p.to_dict()
+                alerts = alert_map.get(p.id, [])
+                d["alert_counts"] = {
+                    "red":    sum(1 for a in alerts if a.severity == "red"    and not a.acknowledged),
+                    "yellow": sum(1 for a in alerts if a.severity == "yellow" and not a.acknowledged),
+                }
+                d["observation_count"] = obs_counts.get(p.id, 0)
+                result.append(d)
+            return result
 
-    if page_param is not None:
-        pag    = base_query.paginate(page=page_param, per_page=limit, error_out=False)
-        result = _enrich_batch(pag.items)
-        resp   = jsonify({
-            "data": result, "page": pag.page,
-            "limit": limit, "total": pag.total, "pages": pag.pages,
-        })
-        resp.headers["X-Total-Count"] = pag.total
-        resp.headers["X-Total-Pages"] = pag.pages
+        if page_param is not None:
+            pag    = base_query.paginate(page=page_param, per_page=limit, error_out=False)
+            result = _enrich_batch(pag.items)
+            resp   = jsonify({
+                "data": result, "page": pag.page,
+                "limit": limit, "total": pag.total, "pages": pag.pages,
+            })
+            resp.headers["X-Total-Count"] = pag.total
+            resp.headers["X-Total-Pages"] = pag.pages
+            return resp
+
+        patients = base_query.all()
+        result   = _enrich_batch(patients)
+        resp     = jsonify(result)
+        resp.headers["X-Total-Count"] = len(result)
         return resp
 
-    patients = base_query.all()
-    result   = _enrich_batch(patients)
-    resp     = jsonify(result)
+    # ── Doctor-scoped path (strict isolation) ─────────────────────────────────
+    if page_param is not None:
+        result, total, pages = get_doctor_patients(
+            doc_id, page=page_param, limit=limit, status_filter=status_filter
+        )
+        resp = jsonify({
+            "data": result, "page": page_param,
+            "limit": limit, "total": total, "pages": pages,
+        })
+        resp.headers["X-Total-Count"] = total
+        resp.headers["X-Total-Pages"] = pages
+        return resp
+
+    result = get_doctor_patients(doc_id, limit=limit, status_filter=status_filter)
+    resp   = jsonify(result)
     resp.headers["X-Total-Count"] = len(result)
     return resp
 
@@ -95,6 +131,13 @@ def list_patients():
 @patient_bp.route("/api/patient", methods=["POST"])
 @jwt_required()
 def create_patient():
+    """
+    POST /api/patient
+
+    SECURITY: doctor_id is ALWAYS taken from the authenticated JWT identity.
+    The request body cannot supply or override the doctor_id — any such field
+    is ignored. This prevents privilege escalation via body injection.
+    """
     doc_id  = int(get_jwt_identity())
     payload, err = validate_request(PatientSchema, request.get_json())
     if err:
@@ -113,39 +156,13 @@ def create_patient():
             "patient_limit": doctor.patient_limit,
         }), 403
 
-    # Collision-safe patient_id
-    count      = Patient.query.count() + 1
-    patient_id = f"PTH-{count:03d}"
-    while Patient.query.filter_by(patient_id=patient_id).first():
-        count     += 1
-        patient_id = f"PTH-{count:03d}"
+    try:
+        p = create_doctor_patient(doc_id, payload)
+    except Exception as exc:
+        # create_doctor_patient calls abort() on quota; re-raise abort exceptions.
+        raise
 
-    def _parse_dt(s):
-        try:
-            return datetime.fromisoformat(s.replace("Z", "+00:00"))
-        except Exception:
-            return None
-
-    admission_time = _parse_dt(payload.get("admission_time") or "") or datetime.utcnow()
-    rupture_time   = _parse_dt(payload.get("membrane_rupture_time") or "")
-
-    p = Patient(
-        patient_id=patient_id,
-        name=payload["name"],
-        age=payload["age"],
-        gravida=payload["gravida"],
-        parity=payload["parity"],
-        gestational_age=payload["gestational_age"],
-        admission_time=admission_time,
-        membrane_rupture_time=rupture_time,
-        doctor_id=doc_id,
-        consent_obtained=True,
-        consent_date=datetime.now(timezone.utc).replace(tzinfo=None),
-        consent_method=payload.get("consent_method") or "digital",
-    )
-    db.session.add(p)
-    db.session.commit()
-
+    # Quota warning email (best-effort).
     if doctor and doctor.patient_limit:
         used      = doctor.patients_used
         threshold = max(1, int(doctor.patient_limit * 0.8))
@@ -163,6 +180,7 @@ def create_patient():
 @patient_bp.route("/api/patient/<patient_id>", methods=["GET"])
 @jwt_required()
 def get_patient(patient_id):
+    """SECURITY: ownership enforced by get_patient_for_doctor (fail-closed)."""
     doc_id = int(get_jwt_identity())
     p = get_patient_for_doctor(patient_id, doc_id)
     return jsonify(p.to_dict())
@@ -171,6 +189,7 @@ def get_patient(patient_id):
 @patient_bp.route("/api/patient/<patient_id>", methods=["PATCH"])
 @jwt_required()
 def update_patient(patient_id):
+    """SECURITY: ownership enforced before any mutation."""
     doc_id = int(get_jwt_identity())
     p = get_patient_for_doctor(patient_id, doc_id)
 
@@ -199,9 +218,25 @@ def update_patient(patient_id):
     return jsonify(p.to_dict())
 
 
+@patient_bp.route("/api/patient/<patient_id>", methods=["DELETE"])
+@jwt_required()
+def delete_patient(patient_id):
+    """
+    DELETE /api/patient/<patient_id>
+
+    Hard-deletes the patient (cascades to observations, alerts via ORM).
+    SECURITY: ownership checked before deletion. Doctor cannot delete another
+    doctor's patients — returns 403.
+    """
+    doc_id = int(get_jwt_identity())
+    delete_doctor_patient(doc_id, patient_id)
+    return jsonify({"success": True, "deleted": patient_id})
+
+
 @patient_bp.route("/api/patient/<patient_id>/status", methods=["PATCH"])
 @jwt_required()
 def update_patient_status(patient_id):
+    """SECURITY: ownership enforced before status change."""
     doc_id = int(get_jwt_identity())
     p      = get_patient_for_doctor(patient_id, doc_id)
     data   = request.get_json() or {}

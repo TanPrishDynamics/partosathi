@@ -5,7 +5,9 @@
 venv/
 backend/venv/
 backend/venv_production/
+services/backend/venv/
 lstm_pipeline/venv/
+ai-engine/venv/
 */__pycache__/
 **/__pycache__/
 *.pyc
@@ -17,6 +19,8 @@ lstm_pipeline/venv/
 node_modules/
 frontend/node_modules/
 admin-frontend/node_modules/
+services/frontend/node_modules/
+services/admin-frontend/node_modules/
 .npm/
 .pnp/
 .pnp.js
@@ -24,6 +28,8 @@ admin-frontend/node_modules/
 # ── Build outputs — NEVER commit these ───────────────────────────────────────
 frontend/dist/
 admin-frontend/dist/
+services/frontend/dist/
+services/admin-frontend/dist/
 dist/
 build/
 out/
@@ -52,9 +58,15 @@ frontend/.env
 frontend/.env.local
 admin-frontend/.env
 admin-frontend/.env.local
+services/backend/.env
+services/frontend/.env
+services/frontend/.env.local
+services/admin-frontend/.env
+services/admin-frontend/.env.local
 
 # ── Databases ─────────────────────────────────────────────────────────────────
 backend/instance/
+services/backend/instance/
 instance/
 *.db
 *.sqlite3
@@ -64,6 +76,7 @@ instance/
 logs/
 backend/*.log
 backend/import*.log
+services/backend/*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -87,6 +100,7 @@ node_modules/.cache/
 coverage/
 .nyc_output/
 backend/coverage.xml
+services/backend/coverage.xml
 
 # ── Debug compose (exposes debugger port 9229 to 0.0.0.0 — RCE risk) ─────────
 compose.debug.yaml
@@ -94,7 +108,9 @@ compose.debug.yaml
 # ── ML training data & model artifacts (large binaries) ──────────────────────
 backend/ml/synthetic_labor_data.csv
 backend/ml/lstm_model.pth
+services/backend/ai/tensorflow/data/
 lstm_pipeline/data/
+ai-engine/data/
 
 # ── CI security scan reports ──────────────────────────────────────────────────
 pip-audit.json

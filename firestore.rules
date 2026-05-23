@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // By default, deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // Example secure rule: only allow authenticated users to access their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
