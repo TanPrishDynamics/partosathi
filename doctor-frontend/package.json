@@ -9,7 +9,8 @@
     "build:analyze": "vite-bundle-visualizer",
     "lint": "eslint .",
     "preview": "vite preview",
-    "clean": "rm -rf dist node_modules/.cache"
+    "clean": "rm -rf dist node_modules/.cache",
+    "start": "serve -s dist -l $PORT"
   },
   "dependencies": {
     "@react-oauth/google": "^0.12.1",
@@ -42,6 +43,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "postcss": "^8.5.9",
+    "serve": "^14.2.6",
     "tailwindcss": "^4.2.2",
     "terser": "^5.48.0",
     "vite": "^8.0.4"

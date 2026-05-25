@@ -4,7 +4,7 @@
   "description": "e-Partogram — Enterprise Healthcare SaaS Platform (WHO Partograph Digital System)",
   "private": true,
   "workspaces": [
-    "frontend",
+    "doctor-frontend",
     "admin-frontend"
   ],
   "scripts": {
